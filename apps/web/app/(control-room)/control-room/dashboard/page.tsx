@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { fetchApi } from "@/lib/api";
 import { useSocketStore } from "@/store/socketStore";
+import dynamic from "next/dynamic";
+
+const ControlRoomMap = dynamic(
+  () => import("@/components/maps/ControlRoomMap"),
+  {
+    ssr: false,
+  }
+);
 
 interface Incident {
   _id: string;
@@ -16,26 +24,27 @@ interface Incident {
 }
 
 const SEV_COLOR: Record<string, string> = {
-  LOW:      "#10b981",
-  MEDIUM:   "#f59e0b",
-  HIGH:     "#ef4444",
+  LOW: "#10b981",
+  MEDIUM: "#f59e0b",
+  HIGH: "#ef4444",
   CRITICAL: "#dc2626",
 };
 
 const SEV_BG: Record<string, string> = {
-  LOW:      "rgba(16,185,129,0.12)",
-  MEDIUM:   "rgba(245,158,11,0.12)",
-  HIGH:     "rgba(239,68,68,0.12)",
+  LOW: "rgba(16,185,129,0.12)",
+  MEDIUM: "rgba(245,158,11,0.12)",
+  HIGH: "rgba(239,68,68,0.12)",
   CRITICAL: "rgba(220,38,38,0.15)",
 };
 
 export default function ControlRoomDashboard() {
-  const [incidents, setIncidents]     = useState<Incident[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [selected, setSelected]       = useState<Incident | null>(null);
-  const [filter, setFilter]           = useState("ALL");
-  const [liveCount, setLiveCount]     = useState(0);
-  const { connect, socket }           = useSocketStore();
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Incident | null>(null);
+  const [filter, setFilter] = useState("ALL");
+  const [liveCount, setLiveCount] = useState(0);
+  const [isDispatching, setIsDispatching] = useState(false);
+  const { connect, socket } = useSocketStore();
 
   useEffect(() => {
     connect();
@@ -58,8 +67,37 @@ export default function ControlRoomDashboard() {
     try {
       const res = await fetchApi("/dispatch/active-incidents");
       setIncidents(res.data || []);
-    } catch {}
-    finally { setLoading(false); }
+    } catch (err) {
+      console.error("Failed to load incidents", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDispatch = async (unitType: string) => {
+    if (!selected) return;
+    setIsDispatching(true);
+    try {
+      const res = await fetchApi("/dispatch", {
+        method: "POST",
+        body: JSON.stringify({
+          incidentId: selected._id,
+          unitType,
+        }),
+      });
+
+      if (res.success) {
+        alert(`${unitType} unit successfully dispatched!`);
+        fetchIncidents();
+        setSelected((prev) => prev ? { ...prev, status: "UNIT_DISPATCHED", dispatchedUnits: [...(prev.dispatchedUnits || []), res.data._id] } : null);
+      } else {
+        alert(res.message || `Failed to dispatch ${unitType}`);
+      }
+    } catch (err: any) {
+      alert(`Error dispatching unit: ${err.message}`);
+    } finally {
+      setIsDispatching(false);
+    }
   };
 
   const filtered = filter === "ALL"
@@ -67,7 +105,7 @@ export default function ControlRoomDashboard() {
     : incidents.filter((i) => i.severity === filter);
 
   const criticalCount = incidents.filter(i => i.severity === "CRITICAL").length;
-  const activeCount   = incidents.filter(i => i.status !== "RESOLVED").length;
+  const activeCount = incidents.filter(i => i.status !== "RESOLVED").length;
 
   return (
     <div className="h-screen flex flex-col gap-0" style={{ background: "var(--clr-bg-primary)" }}>
@@ -90,9 +128,9 @@ export default function ControlRoomDashboard() {
         <div className="flex items-center gap-4">
           {/* KPI pills */}
           {[
-            { label: "Active", value: activeCount,   color: "#ef4444" },
+            { label: "Active", value: activeCount, color: "#ef4444" },
             { label: "Critical", value: criticalCount, color: "#dc2626" },
-            { label: "Total",  value: incidents.length, color: "#2d8cf0" },
+            { label: "Total", value: incidents.length, color: "#2d8cf0" },
           ].map((k) => (
             <div key={k.label} className="flex items-center gap-1.5 text-sm">
               <span className="font-black text-lg" style={{ color: k.color }}>{k.value}</span>
@@ -199,56 +237,8 @@ export default function ControlRoomDashboard() {
 
         {/* Right — Map + Detail */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Mock Map */}
-          <div
-            className="flex-1 relative flex items-center justify-center"
-            style={{
-              background: "radial-gradient(ellipse at center, #071426 0%, #040d1a 100%)",
-              backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(45,140,240,0.05) 39px, rgba(45,140,240,0.05) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(45,140,240,0.05) 39px, rgba(45,140,240,0.05) 40px)`,
-            }}
-          >
-            {/* Map placeholder blips */}
-            {filtered.map((inc, i) => (
-              <div
-                key={inc._id}
-                className="absolute cursor-pointer"
-                style={{
-                  left: `${20 + (i * 13) % 60}%`,
-                  top: `${20 + (i * 17) % 60}%`,
-                  transform: "translate(-50%, -50%)",
-                }}
-                onClick={() => setSelected(inc)}
-              >
-                <div
-                  className="w-4 h-4 rounded-full flex items-center justify-center"
-                  style={{
-                    background: SEV_COLOR[inc.severity],
-                    boxShadow: `0 0 0 6px ${SEV_COLOR[inc.severity]}25, 0 0 0 12px ${SEV_COLOR[inc.severity]}10`,
-                    animation: inc.severity === "CRITICAL" ? "pulse-ring 1.5s infinite" : undefined,
-                  }}
-                />
-              </div>
-            ))}
-
-            {filtered.length === 0 && !loading && (
-              <div className="flex flex-col items-center gap-2 opacity-40">
-                <span className="text-5xl">🗺️</span>
-                <p className="text-sm" style={{ color: "var(--clr-text-muted)" }}>No active incidents on map</p>
-              </div>
-            )}
-
-            {/* Map legend */}
-            <div
-              className="absolute bottom-4 left-4 rounded-xl p-3 text-xs space-y-1.5"
-              style={{ background: "rgba(7,20,38,0.85)", border: "1px solid var(--clr-border)" }}
-            >
-              {Object.entries(SEV_COLOR).map(([label, color]) => (
-                <div key={label} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                  <span style={{ color: "var(--clr-text-secondary)" }}>{label}</span>
-                </div>
-              ))}
-            </div>
+          <div className="flex-1 relative">
+            <ControlRoomMap incidents={filtered} />
           </div>
 
           {/* Incident Detail Panel */}
@@ -294,6 +284,34 @@ export default function ControlRoomDashboard() {
                   <p className="font-semibold mt-0.5" style={{ color: "var(--clr-text-primary)" }}>
                     {new Date(selected.createdAt).toLocaleTimeString("en-IN")}
                   </p>
+                </div>
+              </div>
+
+              {/* Manual Override Dispatch Buttons */}
+              <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Manual Override</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDispatch("POLICE")}
+                    disabled={isDispatching || selected.status === "RESOLVED"}
+                    className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-50 border border-blue-500/30 text-blue-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
+                  >
+                    🚓 Dispatch Police
+                  </button>
+                  <button
+                    onClick={() => handleDispatch("MEDICAL")}
+                    disabled={isDispatching || selected.status === "RESOLVED"}
+                    className="flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 disabled:opacity-50 border border-emerald-500/30 text-emerald-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
+                  >
+                    🚑 Dispatch Medics
+                  </button>
+                  <button
+                    onClick={() => handleDispatch("FIRE")}
+                    disabled={isDispatching || selected.status === "RESOLVED"}
+                    className="flex-1 bg-orange-600/20 hover:bg-orange-600/30 disabled:opacity-50 border border-orange-500/30 text-orange-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
+                  >
+                    🚒 Dispatch Fire
+                  </button>
                 </div>
               </div>
             </div>

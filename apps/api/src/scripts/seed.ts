@@ -12,8 +12,10 @@ const seedDB = async () => {
     console.log('Connected to MongoDB for seeding...');
 
     // Clear existing data
-    await mongoose.connection.db.dropDatabase();
-    console.log('Database dropped.');
+    if (mongoose.connection.db) {
+      await mongoose.connection.db.dropDatabase();
+      console.log('Database dropped.');
+    }
 
     const passwordHash = await bcrypt.hash('password123', 12);
 

@@ -39,8 +39,13 @@ export const register = async (req: Request, res: Response) => {
       user = await Citizen.create({
         firstName, lastName, email, phone, passwordHash, role: userRole
       });
+    } else if (userRole === Role.OFFICER) {
+      user = await User.create({
+        firstName, lastName, email, phone, passwordHash, role: userRole,
+        badgeNumber: `OFF-${Math.floor(Math.random() * 10000)}`, // Auto-generate mock badge
+        department: "POLICE" // Assuming POLICE by default for testing
+      });
     } else {
-      // In production, other roles should be created by an Admin, not public endpoint
       user = await User.create({
         firstName, lastName, email, phone, passwordHash, role: userRole
       });
@@ -68,11 +73,16 @@ export const register = async (req: Request, res: Response) => {
         token
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ success: false, errors: error.errors });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Validation failed: ' + error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', '),
+        errors: error.errors 
+      });
     }
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('Registration error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };
 

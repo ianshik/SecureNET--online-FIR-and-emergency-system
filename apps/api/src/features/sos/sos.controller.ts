@@ -5,6 +5,7 @@ import { Officer, Role } from '../../models/User';
 import { Ambulance, Station } from '../../models/Resource';
 import { AuthRequest } from '../../middleware/auth';
 import { z } from 'zod';
+import { getIO } from '../../sockets/socket';
 
 const createSosSchema = z.object({
   coordinates: z.tuple([z.number(), z.number()]),
@@ -38,25 +39,22 @@ export const triggerSOS = async (req: AuthRequest, res: Response) => {
 
     const [lon, lat] = validatedData.coordinates;
     const searchRadiusKm = 10;
-    const earthRadiusKm = 6378.1;
 
-    let dispatchedRequests = [];
+    let dispatchedRequests: any[] = [];
 
     // Dispatch Police
     if (validatedData.servicesRequired.includes('POLICE')) {
-      // Find nearest available officer
       const nearestOfficer = await Officer.findOne({
         status: 'AVAILABLE',
         currentLocation: {
           $near: {
             $geometry: { type: 'Point', coordinates: [lon, lat] },
-            $maxDistance: searchRadiusKm * 1000, // in meters
+            $maxDistance: searchRadiusKm * 1000,
           }
         }
       });
 
       if (nearestOfficer) {
-        // ETA mock: 1 min per km + 2 mins base
         const distanceObj = await Officer.aggregate([
           {
             $geoNear: {
@@ -73,9 +71,8 @@ export const triggerSOS = async (req: AuthRequest, res: Response) => {
         const eta = Math.ceil(distKm * 1 + 2);
         
         const dispatchReq = await dispatchUnit(incident._id, nearestOfficer._id, 'POLICE', eta);
-        dispatchedRequests.push(dispatchReq._id);
+        dispatchedRequests.push(dispatchReq);
         
-        // Update officer status to avoid multiple dispatches
         await Officer.findByIdAndUpdate(nearestOfficer._id, { status: 'DISPATCHED' });
       }
     }
@@ -93,8 +90,8 @@ export const triggerSOS = async (req: AuthRequest, res: Response) => {
       });
 
       if (nearestAmbulance) {
-        const dispatchReq = await dispatchUnit(incident._id, nearestAmbulance._id, 'AMBULANCE', 10); // Mock 10 min ETA
-        dispatchedRequests.push(dispatchReq._id);
+        const dispatchReq = await dispatchUnit(incident._id, nearestAmbulance._id, 'AMBULANCE', 10);
+        dispatchedRequests.push(dispatchReq);
         await Ambulance.findByIdAndUpdate(nearestAmbulance._id, { status: 'DISPATCHED', assignedTo: incident._id });
       }
     }
@@ -102,11 +99,34 @@ export const triggerSOS = async (req: AuthRequest, res: Response) => {
     // Update incident with dispatch requests
     if (dispatchedRequests.length > 0) {
       incident.status = IncidentStatus.UNIT_DISPATCHED;
-      incident.dispatchedUnits = dispatchedRequests as any;
+      incident.dispatchedUnits = dispatchedRequests.map(d => d._id) as any;
       await incident.save();
     }
 
-    // TODO: Emit Socket.io events to control room and specific officers
+    // ═══════ Emit Real-Time Socket Events ═══════
+    try {
+      const io = getIO();
+
+      // Notify the Control Room
+      io.to('role:CONTROL_ROOM').emit('sos:new', {
+        incidentId: incident._id,
+        severity: incident.severity,
+        location: incident.location,
+        servicesRequired: incident.servicesRequired,
+        timestamp: new Date(),
+      });
+
+      // Notify each dispatched officer individually
+      for (const dispatchReq of dispatchedRequests) {
+        const populatedDispatch = await DispatchRequest.findById(dispatchReq._id)
+          .populate('incidentId');
+
+        io.to(`user:${dispatchReq.unitId}`).emit('dispatch:new', populatedDispatch);
+      }
+    } catch (socketErr) {
+      // Socket errors should not fail the SOS response
+      console.error('Socket emit error (non-fatal):', socketErr);
+    }
 
     res.status(201).json({
       success: true,

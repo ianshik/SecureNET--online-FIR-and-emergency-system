@@ -51,6 +51,57 @@ export const respondToDispatch = async (req: AuthRequest, res: Response) => {
   }
 };
 
+const createDispatchSchema = z.object({
+  incidentId: z.string(),
+  unitType: z.enum(['POLICE', 'MEDICAL', 'FIRE']),
+});
+
+export const createDispatch = async (req: AuthRequest, res: Response) => {
+  try {
+    const validatedData = createDispatchSchema.parse(req.body);
+    
+    // Find an available officer
+    // Note: Officer model currently doesn't have a department field, so we find any available officer
+    const officer = await Officer.findOne({ 
+      status: 'AVAILABLE' 
+    });
+
+    if (!officer) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `No available units right now.` 
+      });
+    }
+
+    // Create the dispatch request
+    const dispatchReq = await DispatchRequest.create({
+      incidentId: validatedData.incidentId,
+      unitId: officer._id,
+      unitType: validatedData.unitType,
+      status: 'PENDING',
+      etaMinutes: Math.floor(Math.random() * 10) + 2, // Mock ETA 2-12 mins
+    });
+
+    // Update incident status
+    const incident = await Incident.findByIdAndUpdate(
+      validatedData.incidentId,
+      { 
+        status: IncidentStatus.UNIT_DISPATCHED,
+        $push: { dispatchedUnits: dispatchReq._id }
+      },
+      { new: true }
+    );
+
+    res.status(201).json({ success: true, data: dispatchReq });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, errors: error.errors });
+    }
+    console.error('Dispatch creation error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
+  }
+};
+
 export const getMyDispatches = async (req: AuthRequest, res: Response) => {
   try {
     const dispatches = await DispatchRequest.find({ unitId: req.user!.id })

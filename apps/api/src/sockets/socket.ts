@@ -4,8 +4,15 @@ import { createClient } from 'redis';
 import http from 'http';
 import { verifyToken } from '../utils/jwt';
 
+let ioInstance: Server | null = null;
+
+export const getIO = (): Server => {
+  if (!ioInstance) throw new Error('Socket.io not initialized');
+  return ioInstance;
+};
+
 export const setupSocket = (server: http.Server) => {
-  const io = new Server(server, {
+  ioInstance = new Server(server, {
     cors: {
       origin: process.env.NEXTAUTH_URL || 'http://localhost:3000',
       methods: ['GET', 'POST'],
@@ -13,12 +20,34 @@ export const setupSocket = (server: http.Server) => {
     },
   });
 
-  const pubClient = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
-  const subClient = pubClient.duplicate();
+  const io = ioInstance;
 
-  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-    io.adapter(createAdapter(pubClient, subClient));
-  });
+  console.log("REDIS_URL =", process.env.REDIS_URL);
+
+  try {
+    const pubClient = createClient({
+      url: process.env.REDIS_URL
+    });
+
+    const subClient = pubClient.duplicate();
+
+    Promise.all([
+      pubClient.connect(),
+      subClient.connect()
+    ])
+      .then(() => {
+        console.log("✅ Redis Connected");
+        io.adapter(createAdapter(pubClient, subClient));
+      })
+      .catch((err) => {
+        console.error("❌ Redis Connection Failed");
+        console.error(err);
+      });
+
+  } catch (err) {
+    console.error("❌ Redis Setup Failed");
+    console.error(err);
+  }
 
   // Middleware for auth
   io.use((socket, next) => {
@@ -41,7 +70,7 @@ export const setupSocket = (server: http.Server) => {
 
     // Join room for specific role
     socket.join(`role:${userRole}`);
-    
+
     // Join personal room
     socket.join(`user:${(socket as any).user.id}`);
 
