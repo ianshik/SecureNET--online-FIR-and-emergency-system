@@ -26,7 +26,13 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     headers,
   });
 
-  const data = await response.json();
+  let data;
+  const text = await response.text();
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    data = { message: text || response.statusText };
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, data.message || 'API request failed', data.errors || data);

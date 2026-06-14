@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fetchApi } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { Button } from "@/components/ui/Button";
 
 const steps = ["Account Info", "Personal Details", "Review"];
 
@@ -66,33 +67,27 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="slide-in">
-      <div className="text-center mb-8">
-        <div
-          className="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-2xl mb-4"
-          style={{ background: "linear-gradient(135deg, #059669, #2563eb)", boxShadow: "0 0 24px rgba(5,150,105,0.3)" }}
-        >
-          🛡️
-        </div>
-        <h1 className="text-2xl font-black" style={{ color: "var(--clr-text-primary)" }}>
-          Create Account
+    <>
+      <div className="mb-10">
+        <h1 className="font-heading font-black text-3xl uppercase tracking-tighter text-white mb-2">
+          REQUEST ACCESS
         </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--clr-text-secondary)" }}>
-          Register on SecureNet NP-SERP
+        <p className="text-sm text-muted font-medium">
+          Submit clearance request for SecureNet NP-SERP.
         </p>
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-6 px-1">
+      <div className="flex items-center gap-2 mb-8 px-1">
         {steps.map((s, i) => (
-          <div key={s} className="flex-1 flex flex-col items-center gap-1">
+          <div key={s} className="flex-1 flex flex-col items-center gap-2">
             <div
-              className="w-full h-1 rounded-full transition-all duration-300"
-              style={{ background: i <= step ? "var(--clr-accent)" : "rgba(255,255,255,0.1)" }}
+              className="w-full h-[2px] transition-all duration-300"
+              style={{ background: i <= step ? "var(--clr-accent, #F59E0B)" : "rgba(255,255,255,0.1)" }}
             />
             <span
-              className="text-xs font-medium"
-              style={{ color: i === step ? "#60a5fa" : "var(--clr-text-muted)" }}
+              className="text-[10px] font-heading font-bold uppercase tracking-wider"
+              style={{ color: i === step ? "var(--clr-accent, #F59E0B)" : "var(--clr-text-muted, #64748B)" }}
             >
               {s}
             </span>
@@ -102,19 +97,16 @@ export default function RegisterPage() {
 
       <div className="glass-card p-8">
         {error && (
-          <div
-            className="px-4 py-3 rounded-lg text-sm font-medium mb-5"
-            style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}
-          >
-            ⚠️ {error}
+          <div className="px-4 py-3 rounded-md text-xs font-bold font-heading tracking-wider uppercase bg-danger/10 border border-danger/30 text-danger mb-6">
+            [ERROR] {error}
           </div>
         )}
 
         {step === 0 && (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-6">
             <div className="form-control">
               <label className="form-label">Email Address</label>
-              <input className="form-input" type="email" placeholder="you@example.com"
+              <input className="form-input" type="email" placeholder="you@securenet.gov"
                 value={form.email} onChange={(e) => update("email", e.target.value)} />
             </div>
             <div className="form-control">
@@ -127,23 +119,23 @@ export default function RegisterPage() {
               <input className="form-input" type="password" placeholder="Re-enter password"
                 value={form.confirmPassword} onChange={(e) => update("confirmPassword", e.target.value)} />
             </div>
-            <button className="btn-primary w-full mt-1" onClick={handleNext}>
-              Continue →
-            </button>
+            <Button className="w-full mt-2" onClick={handleNext}>
+              PROCEED TO PERSONAL DETAILS
+            </Button>
           </div>
         )}
 
         {step === 1 && (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="form-control">
                 <label className="form-label">First Name</label>
-                <input className="form-input" placeholder="John"
+                <input className="form-input" placeholder="Operator"
                   value={form.firstName} onChange={(e) => update("firstName", e.target.value)} />
               </div>
               <div className="form-control">
                 <label className="form-label">Last Name</label>
-                <input className="form-input" placeholder="Doe"
+                <input className="form-input" placeholder="Name"
                   value={form.lastName} onChange={(e) => update("lastName", e.target.value)} />
               </div>
             </div>
@@ -165,26 +157,22 @@ export default function RegisterPage() {
               <input className="form-input" placeholder="XXXX-XXXX-XXXX"
                 value={form.govtIdNumber} onChange={(e) => update("govtIdNumber", e.target.value)} />
             </div>
-            <div className="flex gap-3 mt-1">
-              <button
-                onClick={() => setStep(0)}
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--clr-border)", color: "var(--clr-text-secondary)" }}
-              >
-                ← Back
-              </button>
-              <button className="flex-[2] btn-primary" onClick={handleNext}>Continue →</button>
+            <div className="flex gap-4 mt-2">
+              <Button variant="outline" onClick={() => setStep(0)} className="w-1/3">
+                BACK
+              </Button>
+              <Button onClick={handleNext} className="w-2/3">
+                PROCEED TO REVIEW
+              </Button>
             </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="flex flex-col gap-5">
-            <h3 className="font-bold text-base" style={{ color: "var(--clr-text-primary)" }}>Review Your Details</h3>
-            <div
-              className="rounded-xl p-5 space-y-3 text-sm"
-              style={{ background: "rgba(7,20,38,0.8)", border: "1px solid var(--clr-border)" }}
-            >
+          <div className="flex flex-col gap-6">
+            <h3 className="font-heading font-bold text-lg uppercase tracking-wider text-white">Review Clearance Details</h3>
+            
+            <div className="rounded-md p-5 space-y-4 text-sm bg-surface border border-surface-border">
               {[
                 ["Name", `${form.firstName} ${form.lastName}`],
                 ["Email", form.email],
@@ -192,40 +180,35 @@ export default function RegisterPage() {
                 ["ID", `${form.govtIdType}: ${form.govtIdNumber || "—"}`],
                 ["Role", form.role],
               ].map(([label, val]) => (
-                <div key={label} className="flex justify-between">
-                  <span style={{ color: "var(--clr-text-muted)" }}>{label}</span>
-                  <span className="font-medium" style={{ color: "var(--clr-text-primary)" }}>{val}</span>
+                <div key={label} className="flex justify-between border-b border-surface-border/50 pb-2 last:border-0 last:pb-0">
+                  <span className="text-muted font-heading font-bold uppercase text-[10px] tracking-wider">{label}</span>
+                  <span className="font-medium text-white">{val}</span>
                 </div>
               ))}
             </div>
-            <div
-              className="text-xs px-3 py-2.5 rounded-lg"
-              style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399" }}
-            >
-              ℹ️ Your Govt. ID will be reviewed by a Control Room Operator for verification.
+            
+            <div className="text-[11px] px-4 py-3 rounded-md bg-accent/10 border border-accent/20 text-accent font-medium">
+              [NOTICE] Your Govt. ID will be reviewed by a Control Room Operator for verification before full clearance is granted.
             </div>
-            <div className="flex gap-3 mt-1">
-              <button
-                onClick={() => setStep(1)}
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--clr-border)", color: "var(--clr-text-secondary)" }}
-              >
-                ← Back
-              </button>
-              <button className="flex-[2] btn-primary" onClick={handleSubmit} disabled={loading}>
-                {loading ? "Creating Account…" : "✅ Create Account"}
-              </button>
+            
+            <div className="flex gap-4 mt-2">
+              <Button variant="outline" onClick={() => setStep(1)} className="w-1/3">
+                BACK
+              </Button>
+              <Button onClick={handleSubmit} disabled={loading} className="w-2/3">
+                {loading ? "SUBMITTING..." : "CONFIRM & SUBMIT"}
+              </Button>
             </div>
           </div>
         )}
       </div>
 
-      <p className="text-center text-sm mt-5" style={{ color: "var(--clr-text-secondary)" }}>
-        Already have an account?{" "}
-        <Link href="/login" className="font-semibold" style={{ color: "#60a5fa" }}>
-          Sign in
+      <p className="text-center text-sm mt-8 text-muted">
+        Already have clearance?{" "}
+        <Link href="/login" className="font-heading font-bold text-accent uppercase tracking-widest hover:text-white transition-colors">
+          INITIATE LOGIN
         </Link>
       </p>
-    </div>
+    </>
   );
 }

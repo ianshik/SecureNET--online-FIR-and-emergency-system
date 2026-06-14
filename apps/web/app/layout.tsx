@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { Space_Grotesk, Rajdhani } from "next/font/google";
 import "./globals.css";
+
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-inter" });
+const rajdhani = Rajdhani({ subsets: ["latin"], variable: "--font-montserrat", weight: ["400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
   title: "SecureNet NP-SERP | National Emergency Response Platform",
@@ -20,11 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      </head>
-      <body className="antialiased">
+      <body className={`${spaceGrotesk.variable} ${rajdhani.variable} antialiased bg-black text-foreground`}>
         {children}
       </body>
     </html>

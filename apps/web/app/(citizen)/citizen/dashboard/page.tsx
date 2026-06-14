@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { fetchApi } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-import { useSocketStore } from "@/store/socketStore";
+import { 
+  FileText, Hourglass, CheckCircle2, 
+  Inbox, PenTool, FileSearch, MapPin, ShieldCheck, Wifi
+} from "lucide-react";
 
 interface Complaint {
   _id: string;
@@ -15,37 +18,28 @@ interface Complaint {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  SUBMITTED:    "badge-medium",
-  UNDER_REVIEW: "badge-medium",
-  ASSIGNED:     "badge-high",
-  IN_PROGRESS:  "badge-high",
-  RESOLVED:     "badge-low",
-  CLOSED:       "badge-low",
-  REJECTED:     "badge-critical",
+  SUBMITTED:    "bg-slate-800 text-slate-300 border-slate-700",
+  UNDER_REVIEW: "bg-blue-900/30 text-blue-400 border-blue-500/30",
+  ASSIGNED:     "bg-amber-900/30 text-amber-400 border-amber-500/30",
+  IN_PROGRESS:  "bg-amber-900/30 text-amber-400 border-amber-500/30",
+  RESOLVED:     "bg-emerald-900/30 text-emerald-400 border-emerald-500/30",
+  CLOSED:       "bg-slate-800/50 text-slate-500 border-slate-700",
+  REJECTED:     "bg-red-900/30 text-red-400 border-red-500/30",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  LOW:      "badge-low",
-  MEDIUM:   "badge-medium",
-  HIGH:     "badge-high",
-  CRITICAL: "badge-critical",
+  LOW:      "text-emerald-400",
+  MEDIUM:   "text-amber-400",
+  HIGH:     "text-orange-500",
+  CRITICAL: "text-red-500 font-bold",
 };
 
 export default function CitizenDashboard() {
   const { user } = useAuthStore();
-  const { connect, socket } = useSocketStore();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // SOS state
-  const [sosActive, setSosActive] = useState(false);
-  const [sosLoading, setSosLoading] = useState(false);
-  const [sosServices, setSosServices] = useState<string[]>([]);
-  const [sosMsg, setSosMsg] = useState("");
-  const [sosIncident, setSosIncident] = useState<any>(null);
-
   useEffect(() => {
-    connect();
     fetchComplaints();
   }, []);
 
@@ -60,267 +54,138 @@ export default function CitizenDashboard() {
     }
   };
 
-  const toggleService = (svc: string) => {
-    setSosServices((prev) =>
-      prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
-    );
-  };
-
-  const triggerSOS = async () => {
-    if (sosServices.length === 0) {
-      setSosMsg("Please select at least one service.");
-      return;
-    }
-    setSosLoading(true);
-    setSosMsg("");
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject)
-      );
-      const res = await fetchApi("/sos/trigger", {
-        method: "POST",
-        body: JSON.stringify({
-          coordinates: [pos.coords.longitude, pos.coords.latitude],
-          servicesRequired: sosServices,
-        }),
-      });
-      setSosIncident(res.data);
-      setSosMsg("✅ SOS sent! Responders are on their way.");
-      socket?.emit("join_incident_room", res.data._id);
-    } catch (err: any) {
-      setSosMsg(err.message || "Failed to send SOS. Please try again.");
-    } finally {
-      setSosLoading(false);
-    }
-  };
-
   const statCards = [
-    { label: "Total Complaints", value: complaints.length, icon: "📋", color: "#2d8cf0" },
-    { label: "Pending", value: complaints.filter(c => !["RESOLVED","CLOSED"].includes(c.status)).length, icon: "⏳", color: "#f59e0b" },
-    { label: "Resolved", value: complaints.filter(c => c.status === "RESOLVED").length, icon: "✅", color: "#10b981" },
-    { label: "Active SOS", value: sosIncident ? 1 : 0, icon: "🚨", color: "#ef4444" },
+    { label: "Total Complaints", value: complaints.length, icon: <FileText className="w-5 h-5"/>, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+    { label: "Pending Review", value: complaints.filter(c => !["RESOLVED","CLOSED"].includes(c.status)).length, icon: <Hourglass className="w-5 h-5"/>, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+    { label: "Resolved", value: complaints.filter(c => c.status === "RESOLVED").length, icon: <CheckCircle2 className="w-5 h-5"/>, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+    { label: "Network Status", value: "SECURE", icon: <Wifi className="w-5 h-5"/>, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   ];
 
   return (
-    <div className="space-y-8 slide-in">
+    <div className="space-y-8 slide-in max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-surface-border pb-6">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: "var(--clr-text-primary)" }}>
-            Good day, {user?.firstName} 👋
+          <h1 className="font-heading font-black text-3xl tracking-tighter text-white uppercase flex items-center gap-3">
+            CITIZEN TERMINAL <span className="text-accent opacity-50">//</span> {user?.firstName}
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--clr-text-secondary)" }}>
-            Your safety dashboard — SecureNet NP-SERP
+          <p className="text-xs font-mono text-muted uppercase tracking-widest mt-1">
+            National Emergency Response Platform — Secure Access
           </p>
         </div>
-        <div
-          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
-          style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", color: "#34d399" }}
-        >
-          <span className="status-dot online" />
-          Connected to SecureNet
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <Wifi className="w-4 h-4 animate-pulse" />
+          <span className="text-[10px] font-heading font-bold uppercase tracking-widest">Network Secure</span>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
-          <div
-            key={s.label}
-            className="glass-card stat-card p-5"
-            style={{ borderColor: `${s.color}25` }}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--clr-text-muted)" }}>
-                  {s.label}
-                </p>
-                <p className="text-3xl font-black mt-1" style={{ color: s.color }}>{s.value}</p>
-              </div>
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-                style={{ background: `${s.color}15` }}
-              >
-                {s.icon}
-              </div>
+          <div key={s.label} className={`glass-card p-5 border ${s.border} relative overflow-hidden group`}>
+            <div className={`absolute top-0 right-0 p-4 opacity-20 transition-transform group-hover:scale-110 ${s.color}`}>
+              {s.icon}
             </div>
+            <p className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted mb-2 relative z-10">
+              {s.label}
+            </p>
+            <p className={`text-4xl font-black font-heading ${s.color} relative z-10`}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SOS Panel */}
-        <div className="glass-card p-6 flex flex-col items-center gap-5" style={{ borderColor: "rgba(239,68,68,0.2)" }}>
-          <div className="text-center">
-            <h2 className="text-base font-bold" style={{ color: "var(--clr-text-primary)" }}>
-              Emergency SOS
-            </h2>
-            <p className="text-xs mt-1" style={{ color: "var(--clr-text-secondary)" }}>
-              Tap to summon help immediately
-            </p>
-          </div>
+      {/* Complaints List (Now Full Width) */}
+      <div className="glass-card p-6 flex flex-col">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-surface-border">
+          <h2 className="font-heading font-black text-xl text-white uppercase tracking-widest flex items-center gap-2">
+            <FileText className="w-5 h-5 text-accent" /> FILED REPORTS
+          </h2>
+          <a
+            href="/citizen/complaints/new"
+            className="text-[10px] font-heading font-bold px-3 py-1.5 rounded bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-all uppercase tracking-widest flex items-center gap-2"
+          >
+            <PenTool className="w-3 h-3" /> INITIALIZE REPORT
+          </a>
+        </div>
 
-          {/* SOS Button with pulse */}
-          <div className="relative flex items-center justify-center">
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: "radial-gradient(circle, rgba(239,68,68,0.2) 0%, transparent 70%)",
-                animation: "pulse-ring 2.5s ease-out infinite",
-              }}
-            />
-            <button
-              className="btn-sos pulse-ring relative z-10"
-              onClick={triggerSOS}
-              disabled={sosLoading}
-              style={{ width: 88, height: 88, fontSize: "0.85rem" }}
-            >
-              {sosLoading ? "..." : "SOS"}
-            </button>
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-16 rounded bg-surface border border-surface-border animate-pulse" />
+            ))}
           </div>
-
-          {/* Service selector */}
-          <div className="w-full space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-center" style={{ color: "var(--clr-text-muted)" }}>
-              Select Services
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "POLICE",    icon: "👮", label: "Police" },
-                { id: "AMBULANCE", icon: "🚑", label: "Ambulance" },
-                { id: "FIRE",      icon: "🚒", label: "Fire" },
-              ].map((svc) => {
-                const active = sosServices.includes(svc.id);
-                return (
-                  <button
-                    key={svc.id}
-                    onClick={() => toggleService(svc.id)}
-                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-semibold transition-all"
-                    style={{
-                      background: active ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.04)",
-                      border: `1px solid ${active ? "rgba(239,68,68,0.4)" : "var(--clr-border)"}`,
-                      color: active ? "#f87171" : "var(--clr-text-secondary)",
-                    }}
+        ) : complaints.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-12 gap-3 text-muted">
+            <Inbox className="w-12 h-12 opacity-20" />
+            <p className="text-xs font-mono uppercase tracking-widest">NO RECORDS FOUND IN DATABASE</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-[10px] font-heading font-bold text-muted uppercase tracking-widest border-b border-surface-border">
+                  <th className="pb-3 font-medium">Designation</th>
+                  <th className="pb-3 font-medium">Class</th>
+                  <th className="pb-3 font-medium">Priority</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium text-right">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono text-xs">
+                {complaints.map((c) => (
+                  <tr key={c._id} 
+                    className="border-b border-surface-border hover:bg-white/5 transition-colors cursor-pointer group" 
+                    onClick={() => (window.location.href = `/citizen/complaints/${c._id}`)}
                   >
-                    <span className="text-xl">{svc.icon}</span>
-                    {svc.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {sosMsg && (
-            <div
-              className="w-full px-3 py-2.5 rounded-lg text-xs font-medium text-center"
-              style={{
-                background: sosMsg.startsWith("✅") ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-                border: `1px solid ${sosMsg.startsWith("✅") ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
-                color: sosMsg.startsWith("✅") ? "#34d399" : "#f87171",
-              }}
-            >
-              {sosMsg}
-            </div>
-          )}
-
-          {sosIncident && (
-            <div className="w-full rounded-xl p-4 text-xs space-y-1.5" style={{ background: "rgba(7,20,38,0.8)", border: "1px solid var(--clr-border)" }}>
-              <div className="font-bold text-sm" style={{ color: "#34d399" }}>SOS Acknowledged</div>
-              <div className="flex justify-between"><span style={{ color: "var(--clr-text-muted)" }}>Incident ID</span><span style={{ color: "var(--clr-text-secondary)" }}>{sosIncident._id?.slice(-8)}</span></div>
-              <div className="flex justify-between"><span style={{ color: "var(--clr-text-muted)" }}>Status</span><span className="badge badge-high">{sosIncident.status}</span></div>
-            </div>
-          )}
-        </div>
-
-        {/* Complaints List */}
-        <div className="lg:col-span-2 glass-card p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-bold" style={{ color: "var(--clr-text-primary)" }}>
-              My Complaints
-            </h2>
-            <a
-              href="/citizen/complaints/new"
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
-              style={{ background: "rgba(45,140,240,0.1)", border: "1px solid rgba(45,140,240,0.25)", color: "#60a5fa" }}
-            >
-              + File New
-            </a>
-          </div>
-
-          {loading ? (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.04)" }} />
-              ))}
-            </div>
-          ) : complaints.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <span className="text-4xl">📭</span>
-              <p className="text-sm font-medium" style={{ color: "var(--clr-text-secondary)" }}>No complaints filed yet</p>
-              <p className="text-xs" style={{ color: "var(--clr-text-muted)" }}>Your complaint history will appear here</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Date</th>
+                    <td className="py-4">
+                      <span className="text-white font-medium group-hover:text-accent transition-colors">
+                        {c.title}
+                      </span>
+                    </td>
+                    <td className="py-4 text-slate-400">
+                      {c.type.replace("_", " ")}
+                    </td>
+                    <td className="py-4">
+                      <span className={`${PRIORITY_COLORS[c.priority]}`}>
+                        {c.priority}
+                      </span>
+                    </td>
+                    <td className="py-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] border ${STATUS_COLORS[c.status] || "bg-slate-800 text-slate-300 border-slate-700"}`}>
+                        {c.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="py-4 text-slate-500 text-right">
+                      {new Date(c.createdAt).toLocaleDateString("en-IN")}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {complaints.map((c) => (
-                    <tr key={c._id} className="cursor-pointer" onClick={() => (window.location.href = `/citizen/complaints/${c._id}`)}>
-                      <td>
-                        <span className="font-medium" style={{ color: "var(--clr-text-primary)" }}>
-                          {c.title}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="text-xs" style={{ color: "var(--clr-text-muted)" }}>
-                          {c.type.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${PRIORITY_COLORS[c.priority]}`}>{c.priority}</span>
-                      </td>
-                      <td>
-                        <span className={`badge ${STATUS_COLORS[c.status] || "badge-medium"}`}>
-                          {c.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="text-xs" style={{ color: "var(--clr-text-muted)" }}>
-                        {new Date(c.createdAt).toLocaleDateString("en-IN")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Quick Links */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { href: "/citizen/complaints/new", icon: "📝", label: "File Complaint", desc: "New civil/criminal report" },
-          { href: "/citizen/fir",            icon: "📄", label: "FIR Status",    desc: "Track your FIRs" },
-          { href: "/citizen/track",          icon: "📍", label: "Live Track",   desc: "Active responder location" },
-          { href: "/citizen/profile",        icon: "🔐", label: "My Profile",   desc: "Verification & settings" },
+          { href: "/citizen/complaints/new", icon: <PenTool className="w-6 h-6"/>, label: "FILE REPORT", desc: "Initialize incident record" },
+          { href: "/citizen/fir",            icon: <FileSearch className="w-6 h-6"/>, label: "FIR ARCHIVE", desc: "Access official logs" },
+          { href: "/citizen/track",          icon: <MapPin className="w-6 h-6"/>, label: "LIVE TRACKING", desc: "Monitor responder units" },
+          { href: "/citizen/profile",        icon: <ShieldCheck className="w-6 h-6"/>, label: "SECURITY PROFILE", desc: "Identity & clearance" },
         ].map((l) => (
           <a
             key={l.href}
             href={l.href}
-            className="glass-card glass-card-hover p-4 flex flex-col gap-2"
+            className="glass-card p-5 border border-surface-border hover:border-accent/50 hover:bg-accent/5 transition-all flex flex-col gap-3 group"
           >
-            <span className="text-2xl">{l.icon}</span>
-            <div className="text-sm font-bold" style={{ color: "var(--clr-text-primary)" }}>{l.label}</div>
-            <div className="text-xs" style={{ color: "var(--clr-text-muted)" }}>{l.desc}</div>
+            <div className="text-muted group-hover:text-accent transition-colors">
+              {l.icon}
+            </div>
+            <div>
+              <div className="text-sm font-heading font-black text-white tracking-widest">{l.label}</div>
+              <div className="text-[10px] font-mono text-muted uppercase mt-1">{l.desc}</div>
+            </div>
           </a>
         ))}
       </div>

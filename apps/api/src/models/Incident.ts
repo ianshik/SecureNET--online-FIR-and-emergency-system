@@ -23,7 +23,7 @@ export interface IIncident extends Document {
     type: 'Point';
     coordinates: [number, number];
   };
-  servicesRequired: ('POLICE' | 'AMBULANCE' | 'FIRE')[];
+  servicesRequired: ('POLICE' | 'AMBULANCE' | 'FIRE' | 'MEDICAL')[];
   severity: IncidentSeverity;
   status: IncidentStatus;
   dispatchedUnits: mongoose.Types.ObjectId[]; // References to DispatchRequest
@@ -38,7 +38,7 @@ const incidentSchema = new Schema(
       type: { type: String, enum: ['Point'], default: 'Point' },
       coordinates: { type: [Number], required: true },
     },
-    servicesRequired: [{ type: String, enum: ['POLICE', 'AMBULANCE', 'FIRE'] }],
+    servicesRequired: [{ type: String, enum: ['POLICE', 'AMBULANCE', 'FIRE', 'MEDICAL'] }],
     severity: { type: String, enum: Object.values(IncidentSeverity), default: IncidentSeverity.HIGH },
     status: { type: String, enum: Object.values(IncidentStatus), default: IncidentStatus.SOS_SENT, index: true },
     dispatchedUnits: [{ type: Schema.Types.ObjectId, ref: 'DispatchRequest' }],

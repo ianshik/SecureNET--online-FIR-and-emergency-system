@@ -15,6 +15,7 @@ import evidenceRoutes from './features/evidence/evidence.routes';
 import aiRoutes from './features/ai/ai.routes';
 import analyticsRoutes from './features/analytics/analytics.routes';
 import notificationRoutes from './features/notifications/notification.routes';
+import usersRoutes from './features/users/users.routes';
 import { setupSocket } from './sockets/socket';
 import path from "path";
 dotenv.config({
@@ -56,6 +57,7 @@ app.use('/api/evidence', evidenceRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/users', usersRoutes);
 
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'SecureNet API is running' });

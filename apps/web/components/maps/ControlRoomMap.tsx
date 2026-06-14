@@ -37,9 +37,11 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
 
       mapInstanceRef.current = map;
 
-      // Add Tile Layer
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      // Add CartoDB Dark Matter Tile Layer
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 20,
       }).addTo(map);
 
       // Render initial markers
@@ -80,18 +82,18 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
     currentIncidents.forEach((inc) => {
       if (!markersRef.current[inc._id]) {
         // Create new marker
-        const color = SEV_COLOR[inc.severity] || "#3b82f6";
+        const color = SEV_COLOR[inc.severity] || "#f59e0b";
         const isPulse = inc.severity === "CRITICAL";
 
         const icon = L.divIcon({
           className: "custom-leaflet-icon",
           html: `
-            <div class="relative w-4 h-4 rounded-full flex items-center justify-center shadow-lg" style="background: ${color}; border: 2px solid white;">
-              ${isPulse ? `<div class="absolute inset-0 rounded-full animate-ping opacity-75" style="background: ${color};"></div>` : ''}
+            <div class="relative w-3 h-3 rounded-sm flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.5)]" style="background: ${color}; border: 1px solid white; transform: rotate(45deg);">
+              ${isPulse ? `<div class="absolute inset-0 rounded-sm animate-ping opacity-75" style="background: ${color};"></div>` : ''}
             </div>
           `,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
         });
 
         // Remember: MongoDB is [lng, lat], Leaflet is [lat, lng]
@@ -99,14 +101,14 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
           .addTo(map)
           .bindPopup(`
             <div class="custom-popup font-sans">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase" style="background: ${color}20; color: ${color}">
+              <div class="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
+                <span class="text-[9px] font-bold font-heading uppercase tracking-widest px-1.5 py-0.5 rounded" style="background: ${color}20; color: ${color}; border: 1px solid ${color}30">
                   ${inc.severity}
                 </span>
-                <span class="text-[10px] text-slate-500 font-mono">#${inc._id.slice(-6)}</span>
+                <span class="text-[10px] text-gray-500 font-mono tracking-wider">#${inc._id.slice(-6)}</span>
               </div>
-              <p class="text-sm font-bold m-0 text-white">${inc.servicesRequired.join(" + ")}</p>
-              <p class="text-xs text-slate-500 m-0 mt-1 capitalize">${inc.status.replace("_", " ").toLowerCase()}</p>
+              <p class="text-xs font-black font-heading uppercase tracking-widest m-0 text-white">${inc.servicesRequired.join(" + ")}</p>
+              <p class="text-[10px] text-gray-400 font-heading font-bold uppercase tracking-widest m-0 mt-1">${inc.status.replace("_", " ")}</p>
             </div>
           `);
 
@@ -119,8 +121,8 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
   };
 
   return (
-    <div className="w-full h-full relative z-0">
-      <div ref={mapContainerRef} style={{ height: "100%", width: "100%", background: "#0f172a" }} />
+    <div className="w-full h-full relative z-0 mix-blend-screen">
+      <div ref={mapContainerRef} style={{ height: "100%", width: "100%", background: "#000000" }} />
 
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -129,12 +131,23 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
           border: none;
         }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-          background: #0f172a !important;
+          background: rgba(10, 10, 10, 0.95) !important;
+          backdrop-filter: blur(10px);
           color: #f8fafc !important;
-          border: 1px solid #1e293b !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-radius: 4px !important;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+        }
+        .leaflet-popup-content {
+          margin: 12px 14px !important;
         }
         .leaflet-container {
-          background: #0f172a !important;
+          background: #000000 !important;
+          font-family: inherit !important;
+        }
+        /* Filter to make map tiles darker and more high-contrast */
+        .leaflet-tile-pane {
+          filter: brightness(0.6) contrast(1.2) grayscale(0.2) invert(0);
         }
       `}} />
     </div>

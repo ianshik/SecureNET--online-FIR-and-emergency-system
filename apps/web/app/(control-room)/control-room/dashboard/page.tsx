@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { fetchApi } from "@/lib/api";
 import { useSocketStore } from "@/store/socketStore";
 import dynamic from "next/dynamic";
+import { Activity, ShieldAlert, CheckCircle2, Siren, Plane, Flame, Shield, X, Crosshair } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 
 const ControlRoomMap = dynamic(
   () => import("@/components/maps/ControlRoomMap"),
-  {
-    ssr: false,
-  }
+  { ssr: false }
 );
 
 interface Incident {
@@ -22,20 +23,6 @@ interface Incident {
   createdAt: string;
   dispatchedUnits: any[];
 }
-
-const SEV_COLOR: Record<string, string> = {
-  LOW: "#10b981",
-  MEDIUM: "#f59e0b",
-  HIGH: "#ef4444",
-  CRITICAL: "#dc2626",
-};
-
-const SEV_BG: Record<string, string> = {
-  LOW: "rgba(16,185,129,0.12)",
-  MEDIUM: "rgba(245,158,11,0.12)",
-  HIGH: "rgba(239,68,68,0.12)",
-  CRITICAL: "rgba(220,38,38,0.15)",
-};
 
 export default function ControlRoomDashboard() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -67,8 +54,8 @@ export default function ControlRoomDashboard() {
     try {
       const res = await fetchApi("/dispatch/active-incidents");
       setIncidents(res.data || []);
-    } catch (err) {
-      console.error("Failed to load incidents", err);
+    } catch (err: any) {
+      console.error("Failed to load incidents:", err.message);
     } finally {
       setLoading(false);
     }
@@ -80,10 +67,7 @@ export default function ControlRoomDashboard() {
     try {
       const res = await fetchApi("/dispatch", {
         method: "POST",
-        body: JSON.stringify({
-          incidentId: selected._id,
-          unitType,
-        }),
+        body: JSON.stringify({ incidentId: selected._id, unitType }),
       });
 
       if (res.success) {
@@ -108,41 +92,33 @@ export default function ControlRoomDashboard() {
   const activeCount = incidents.filter(i => i.status !== "RESOLVED").length;
 
   return (
-    <div className="h-screen flex flex-col gap-0" style={{ background: "var(--clr-bg-primary)" }}>
+    <div className="h-screen flex flex-col bg-black text-foreground font-sans">
       {/* Top bar */}
-      <div
-        className="px-6 py-3 flex items-center justify-between flex-shrink-0"
-        style={{ borderBottom: "1px solid var(--clr-border)", background: "rgba(7,20,38,0.9)" }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="text-lg font-black" style={{ color: "var(--clr-text-primary)" }}>
-            🖥️ Command Center
-          </div>
-          <span
-            className="px-2 py-0.5 rounded-full text-xs font-bold"
-            style={{ background: "rgba(239,68,68,0.15)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)" }}
-          >
-            LIVE
-          </span>
-        </div>
+      <div className="px-6 py-4 flex items-center justify-between flex-shrink-0 border-b border-surface-border bg-surface/80 backdrop-blur-md">
         <div className="flex items-center gap-4">
+          <Activity className="w-6 h-6 text-accent" />
+          <div className="font-heading font-black text-xl uppercase tracking-wider text-white">
+            Command Center
+          </div>
+          <Badge variant="critical" className="ml-2 animate-pulse">
+            LIVE SYSTEM
+          </Badge>
+        </div>
+        <div className="flex items-center gap-8">
           {/* KPI pills */}
           {[
-            { label: "Active", value: activeCount, color: "#ef4444" },
-            { label: "Critical", value: criticalCount, color: "#dc2626" },
-            { label: "Total", value: incidents.length, color: "#2d8cf0" },
+            { label: "Active", value: activeCount, class: "text-danger" },
+            { label: "Critical", value: criticalCount, class: "text-danger font-black" },
+            { label: "Total", value: incidents.length, class: "text-primary" },
           ].map((k) => (
-            <div key={k.label} className="flex items-center gap-1.5 text-sm">
-              <span className="font-black text-lg" style={{ color: k.color }}>{k.value}</span>
-              <span style={{ color: "var(--clr-text-muted)" }}>{k.label}</span>
+            <div key={k.label} className="flex items-center gap-2">
+              <span className={`font-heading text-2xl ${k.class}`}>{k.value}</span>
+              <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">{k.label}</span>
             </div>
           ))}
-          <div
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
-            style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", color: "#34d399" }}
-          >
-            <span className="status-dot online" />
-            System Operational
+          <div className="flex items-center gap-2 px-4 py-2 rounded border border-success/30 bg-success/10 text-success text-[10px] font-heading font-bold uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            Operational
           </div>
         </div>
       </div>
@@ -150,22 +126,18 @@ export default function ControlRoomDashboard() {
       {/* Body: Incidents feed + Detail panel */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left — Incident Feed */}
-        <div
-          className="w-96 flex flex-col flex-shrink-0 overflow-y-auto"
-          style={{ borderRight: "1px solid var(--clr-border)", background: "rgba(7,20,38,0.5)" }}
-        >
+        <div className="w-[400px] flex flex-col flex-shrink-0 border-r border-surface-border bg-surface/40 backdrop-blur-sm">
           {/* Filter tabs */}
-          <div className="flex gap-1 p-3 flex-shrink-0" style={{ borderBottom: "1px solid var(--clr-border)" }}>
+          <div className="flex gap-1 p-4 border-b border-surface-border">
             {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  background: filter === f ? (SEV_BG[f] || "rgba(45,140,240,0.15)") : "transparent",
-                  color: filter === f ? (SEV_COLOR[f] || "#60a5fa") : "var(--clr-text-muted)",
-                  border: filter === f ? `1px solid ${SEV_COLOR[f] || "var(--clr-accent)"}30` : "1px solid transparent",
-                }}
+                className={`flex-1 py-2 rounded text-[10px] font-heading font-bold uppercase tracking-widest transition-all ${
+                  filter === f 
+                    ? f === "CRITICAL" ? "bg-danger text-white shadow-[0_0_15px_rgba(220,38,38,0.4)]" : "bg-accent text-black"
+                    : "text-muted hover:bg-surface-hover border border-surface-border"
+                }`}
               >
                 {f}
               </button>
@@ -173,145 +145,144 @@ export default function ControlRoomDashboard() {
           </div>
 
           {/* Incident Cards */}
-          <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+          <div className="flex-1 p-4 space-y-3 overflow-y-auto">
             {loading ? (
               [...Array(5)].map((_, i) => (
-                <div key={i} className="h-20 rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.04)" }} />
+                <div key={i} className="h-24 rounded border border-surface-border bg-surface animate-pulse" />
               ))
             ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-2">
-                <span className="text-3xl">✅</span>
-                <p className="text-sm" style={{ color: "var(--clr-text-secondary)" }}>No active incidents</p>
+              <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-50">
+                <CheckCircle2 className="w-12 h-12 text-success" />
+                <p className="text-xs font-heading font-bold uppercase tracking-widest text-muted">No active incidents</p>
               </div>
             ) : (
-              filtered.map((incident) => (
-                <div
-                  key={incident._id}
-                  onClick={() => setSelected(incident)}
-                  className="rounded-xl p-4 cursor-pointer transition-all"
-                  style={{
-                    background: selected?._id === incident._id
-                      ? SEV_BG[incident.severity]
-                      : "rgba(11,29,51,0.5)",
-                    border: `1px solid ${selected?._id === incident._id ? SEV_COLOR[incident.severity] + "40" : "var(--clr-border)"}`,
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div
-                      className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold"
-                      style={{
-                        background: SEV_BG[incident.severity],
-                        color: SEV_COLOR[incident.severity],
-                        border: `1px solid ${SEV_COLOR[incident.severity]}35`,
-                      }}
-                    >
-                      {incident.severity === "CRITICAL" && "⚠️ "}
-                      {incident.severity}
+              filtered.map((incident) => {
+                const isSelected = selected?._id === incident._id;
+                const isCritical = incident.severity === "CRITICAL";
+                
+                return (
+                  <div
+                    key={incident._id}
+                    onClick={() => setSelected(incident)}
+                    className={`rounded p-4 cursor-pointer transition-all border ${
+                      isSelected 
+                        ? isCritical ? "bg-danger/20 border-danger shadow-[0_0_20px_rgba(220,38,38,0.2)]" : "bg-accent/10 border-accent shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+                        : "bg-surface border-surface-border hover:border-accent/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <Badge variant={incident.severity.toLowerCase() as any}>
+                        {isCritical && <ShieldAlert className="w-3 h-3 mr-1" />}
+                        {incident.severity}
+                      </Badge>
+                      <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
+                        {new Date(incident.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </div>
-                    <span className="text-xs" style={{ color: "var(--clr-text-muted)" }}>
-                      {new Date(incident.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+                    <p className="font-heading font-bold uppercase tracking-wider text-white mb-2">
+                      {incident.servicesRequired.join(" + ")}
+                    </p>
+                    <div className="flex items-center gap-1.5 text-xs text-muted mb-3 font-mono">
+                      <Crosshair className="w-3 h-3 text-accent" />
+                      {incident.location.coordinates[1].toFixed(4)}°N {incident.location.coordinates[0].toFixed(4)}°E
+                    </div>
+                    <div className="flex items-center justify-between border-t border-surface-border/50 pt-3">
+                      <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-primary">
+                        {incident.status.replace("_", " ")}
+                      </span>
+                      <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
+                        {incident.dispatchedUnits?.length || 0} UNITS
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold" style={{ color: "var(--clr-text-primary)" }}>
-                    {incident.servicesRequired.join(" + ")} Emergency
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: "var(--clr-text-muted)" }}>
-                    📍 {incident.location.coordinates[1].toFixed(4)}°N {incident.location.coordinates[0].toFixed(4)}°E
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full"
-                      style={{ background: "rgba(45,140,240,0.1)", color: "#60a5fa" }}
-                    >
-                      {incident.status.replace("_", " ")}
-                    </span>
-                    <span className="text-xs" style={{ color: "var(--clr-text-muted)" }}>
-                      {incident.dispatchedUnits?.length || 0} units
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         {/* Right — Map + Detail */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 relative">
+        <div className="flex-1 flex flex-col relative">
+          <div className="flex-1 relative bg-black">
+            <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_100px_rgba(0,0,0,0.8)]" />
             <ControlRoomMap incidents={filtered} />
           </div>
 
           {/* Incident Detail Panel */}
           {selected && (
-            <div
-              className="flex-shrink-0 p-5"
-              style={{ borderTop: "1px solid var(--clr-border)", background: "rgba(7,20,38,0.8)", maxHeight: "220px" }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-sm font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: SEV_BG[selected.severity], color: SEV_COLOR[selected.severity], border: `1px solid ${SEV_COLOR[selected.severity]}30` }}
-                    >
-                      {selected.severity}
-                    </span>
-                    <span className="text-xs font-mono" style={{ color: "var(--clr-text-muted)" }}>#{selected._id.slice(-8)}</span>
+            <div className="absolute bottom-6 left-6 right-6 z-20 flex flex-col">
+              <div className="glass-card border-accent/30 shadow-[0_20px_50px_rgba(0,0,0,0.8)] p-6 backdrop-blur-xl">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <Badge variant={selected.severity.toLowerCase() as any}>
+                        {selected.severity}
+                      </Badge>
+                      <span className="text-xs font-mono text-muted">ID: {selected._id}</span>
+                    </div>
+                    <p className="font-heading font-black text-2xl uppercase tracking-wide text-white">
+                      {selected.servicesRequired.join(" + ")} EMERGENCY
+                    </p>
                   </div>
-                  <p className="text-base font-bold mt-1" style={{ color: "var(--clr-text-primary)" }}>
-                    {selected.servicesRequired.join(" + ")} Emergency
-                  </p>
+                  <button
+                    onClick={() => setSelected(null)}
+                    className="p-2 rounded hover:bg-surface-hover text-muted hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSelected(null)}
-                  className="text-lg"
-                  style={{ color: "var(--clr-text-muted)" }}
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-4 text-xs">
-                <div>
-                  <p style={{ color: "var(--clr-text-muted)" }}>Status</p>
-                  <p className="font-semibold mt-0.5" style={{ color: "var(--clr-text-primary)" }}>{selected.status.replace("_", " ")}</p>
+                
+                <div className="grid grid-cols-3 gap-6 text-xs mb-6 p-4 rounded bg-black/40 border border-surface-border">
+                  <div>
+                    <p className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted mb-1">Status</p>
+                    <p className="font-medium text-white">{selected.status.replace("_", " ")}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted mb-1">Units Active</p>
+                    <p className="font-medium text-white">{selected.dispatchedUnits?.length || 0} DEPLOYED</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted mb-1">Time Logged</p>
+                    <p className="font-medium font-mono text-white">
+                      {new Date(selected.createdAt).toLocaleTimeString("en-IN")}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p style={{ color: "var(--clr-text-muted)" }}>Units Dispatched</p>
-                  <p className="font-semibold mt-0.5" style={{ color: "var(--clr-text-primary)" }}>{selected.dispatchedUnits?.length || 0}</p>
-                </div>
-                <div>
-                  <p style={{ color: "var(--clr-text-muted)" }}>Reported</p>
-                  <p className="font-semibold mt-0.5" style={{ color: "var(--clr-text-primary)" }}>
-                    {new Date(selected.createdAt).toLocaleTimeString("en-IN")}
-                  </p>
-                </div>
-              </div>
 
-              {/* Manual Override Dispatch Buttons */}
-              <div className="mt-4 pt-4 border-t border-slate-700/50">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Manual Override</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDispatch("POLICE")}
-                    disabled={isDispatching || selected.status === "RESOLVED"}
-                    className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-50 border border-blue-500/30 text-blue-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
-                  >
-                    🚓 Dispatch Police
-                  </button>
-                  <button
-                    onClick={() => handleDispatch("MEDICAL")}
-                    disabled={isDispatching || selected.status === "RESOLVED"}
-                    className="flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 disabled:opacity-50 border border-emerald-500/30 text-emerald-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
-                  >
-                    🚑 Dispatch Medics
-                  </button>
-                  <button
-                    onClick={() => handleDispatch("FIRE")}
-                    disabled={isDispatching || selected.status === "RESOLVED"}
-                    className="flex-1 bg-orange-600/20 hover:bg-orange-600/30 disabled:opacity-50 border border-orange-500/30 text-orange-400 text-xs py-1.5 rounded-lg font-semibold transition-colors"
-                  >
-                    🚒 Dispatch Fire
-                  </button>
+                {/* Manual Override Dispatch Buttons */}
+                <div>
+                  <h3 className="text-[10px] font-heading font-bold text-danger uppercase tracking-widest mb-3">
+                    [OVERRIDE] Tactical Dispatch
+                  </h3>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleDispatch("POLICE")}
+                      disabled={isDispatching || selected.status === "RESOLVED"}
+                      variant="outline"
+                      className="flex-1 border-primary/50 text-primary hover:bg-primary/20 hover:text-primary"
+                    >
+                      <Shield className="w-4 h-4 mr-2" />
+                      DISPATCH POLICE
+                    </Button>
+                    <Button
+                      onClick={() => handleDispatch("MEDICAL")}
+                      disabled={isDispatching || selected.status === "RESOLVED"}
+                      variant="outline"
+                      className="flex-1 border-success/50 text-success hover:bg-success/20 hover:text-success"
+                    >
+                      <Siren className="w-4 h-4 mr-2" />
+                      DISPATCH MEDICS
+                    </Button>
+                    <Button
+                      onClick={() => handleDispatch("FIRE")}
+                      disabled={isDispatching || selected.status === "RESOLVED"}
+                      variant="outline"
+                      className="flex-1 border-orange-500/50 text-orange-500 hover:bg-orange-500/20 hover:text-orange-500"
+                    >
+                      <Flame className="w-4 h-4 mr-2" />
+                      DISPATCH FIRE
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

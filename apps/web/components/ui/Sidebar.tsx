@@ -1,44 +1,46 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { Home, AlertTriangle, FileText, Map, User, Shield, Radio, Activity, Database, Users, LogOut } from "lucide-react";
 
 interface NavItem {
   href: string;
-  icon: string;
+  icon: React.ReactNode;
   label: string;
 }
 
 const CITIZEN_NAV: NavItem[] = [
-  { href: "/citizen/dashboard",  icon: "🏠", label: "Dashboard" },
-  { href: "/citizen/sos",        icon: "🆘", label: "SOS Emergency" },
-  { href: "/citizen/complaints", icon: "📋", label: "My Complaints" },
-  { href: "/citizen/fir",        icon: "📄", label: "FIR Status" },
-  { href: "/citizen/track",      icon: "📍", label: "Live Tracking" },
-  { href: "/citizen/profile",    icon: "👤", label: "Profile" },
+  { href: "/citizen/dashboard",  icon: <Home className="w-5 h-5" />, label: "Dashboard" },
+  { href: "/citizen/sos",        icon: <AlertTriangle className="w-5 h-5" />, label: "SOS Emergency" },
+  { href: "/citizen/complaints", icon: <FileText className="w-5 h-5" />, label: "My Complaints" },
+  { href: "/citizen/fir",        icon: <FileText className="w-5 h-5" />, label: "FIR Status" },
+  { href: "/citizen/track",      icon: <Map className="w-5 h-5" />, label: "Live Tracking" },
+  { href: "/citizen/profile",    icon: <User className="w-5 h-5" />, label: "Profile" },
 ];
 
 const OFFICER_NAV: NavItem[] = [
-  { href: "/officer/dashboard",  icon: "🏠", label: "Dashboard" },
-  { href: "/officer/dispatches", icon: "🚨", label: "My Dispatches" },
-  { href: "/officer/cases",      icon: "📂", label: "Active Cases" },
-  { href: "/officer/fir",        icon: "📝", label: "FIR Workspace" },
-  { href: "/officer/map",        icon: "🗺️", label: "Field Map" },
+  { href: "/officer/dashboard",  icon: <Home className="w-5 h-5" />, label: "Dashboard" },
+  { href: "/officer/dispatches", icon: <Radio className="w-5 h-5" />, label: "My Dispatches" },
+  { href: "/officer/cases",      icon: <FileText className="w-5 h-5" />, label: "Active Cases" },
+  { href: "/officer/fir",        icon: <FileText className="w-5 h-5" />, label: "FIR Workspace" },
+  { href: "/officer/map",        icon: <Map className="w-5 h-5" />, label: "Field Map" },
 ];
 
 const CONTROL_NAV: NavItem[] = [
-  { href: "/control-room/dashboard", icon: "🖥️", label: "Command Center" },
-  { href: "/control-room/incidents", icon: "🚨", label: "Live Incidents" },
-  { href: "/control-room/dispatch",  icon: "📡", label: "Dispatch Panel" },
-  { href: "/control-room/map",       icon: "🗺️", label: "City Map" },
+  { href: "/control-room/dashboard", icon: <Activity className="w-5 h-5" />, label: "Command Center" },
+  { href: "/control-room/incidents", icon: <AlertTriangle className="w-5 h-5" />, label: "Live Incidents" },
+  { href: "/control-room/dispatch",  icon: <Radio className="w-5 h-5" />, label: "Dispatch Panel" },
+  { href: "/control-room/map",       icon: <Map className="w-5 h-5" />, label: "City Map" },
 ];
 
 const AUTHORITY_NAV: NavItem[] = [
-  { href: "/authority/dashboard", icon: "⚖️", label: "Analytics" },
-  { href: "/authority/reports",   icon: "📊", label: "Reports" },
-  { href: "/authority/audit",     icon: "🔍", label: "Audit Logs" },
-  { href: "/authority/officers",  icon: "👮", label: "Officers" },
+  { href: "/authority/dashboard", icon: <Activity className="w-5 h-5" />, label: "Analytics" },
+  { href: "/authority/reports",   icon: <Database className="w-5 h-5" />, label: "Reports" },
+  { href: "/authority/audit",     icon: <Shield className="w-5 h-5" />, label: "Audit Logs" },
+  { href: "/authority/officers",  icon: <Users className="w-5 h-5" />, label: "Officers" },
 ];
 
 const NAV_MAP: Record<string, NavItem[]> = {
@@ -48,20 +50,29 @@ const NAV_MAP: Record<string, NavItem[]> = {
   AUTHORITY:    AUTHORITY_NAV,
 };
 
-const ROLE_META: Record<string, { label: string; color: string; icon: string }> = {
-  CITIZEN:      { label: "Citizen",       color: "#10b981", icon: "👤" },
-  OFFICER:      { label: "Officer",       color: "#2d8cf0", icon: "👮" },
-  CONTROL_ROOM: { label: "Control Room", color: "#8b5cf6", icon: "🖥️" },
-  AUTHORITY:    { label: "Authority",    color: "#f59e0b", icon: "⚖️" },
+const ROLE_META: Record<string, { label: string; bgClass: string; textClass: string; icon: React.ReactNode }> = {
+  CITIZEN:      { label: "Citizen",       bgClass: "bg-success/10 border-success/20", textClass: "text-success", icon: <User className="w-4 h-4" /> },
+  OFFICER:      { label: "Officer",       bgClass: "bg-primary/10 border-primary/20", textClass: "text-primary", icon: <Shield className="w-4 h-4" /> },
+  CONTROL_ROOM: { label: "Control Room", bgClass: "bg-accent/10 border-accent/20", textClass: "text-accent", icon: <Activity className="w-4 h-4" /> },
+  AUTHORITY:    { label: "Authority",    bgClass: "bg-danger/10 border-danger/20", textClass: "text-danger", icon: <Database className="w-4 h-4" /> },
 };
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const role = user?.role || "CITIZEN";
-  const nav = NAV_MAP[role] || CITIZEN_NAV;
-  const meta = ROLE_META[role] || ROLE_META.CITIZEN;
+  
+  let portalRole = "CITIZEN";
+  if (pathname.startsWith("/officer")) portalRole = "OFFICER";
+  else if (pathname.startsWith("/control-room")) portalRole = "CONTROL_ROOM";
+  else if (pathname.startsWith("/authority")) portalRole = "AUTHORITY";
+  else if (user?.role) portalRole = user.role;
+
+  const nav = NAV_MAP[portalRole] || CITIZEN_NAV;
+  const meta = ROLE_META[portalRole] || ROLE_META.CITIZEN;
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const handleLogout = () => {
     logout();
@@ -69,40 +80,29 @@ export default function Sidebar() {
   };
 
   return (
-    <aside
-      className="sidebar w-60 flex flex-col py-5 px-3"
-      style={{ position: "sticky", top: 0, height: "100vh" }}
-    >
+    <aside className="sidebar w-64 flex flex-col py-6 px-4 sticky top-0 h-screen font-sans">
       {/* Logo */}
-      <Link href="/" className="flex items-center gap-2.5 px-3 mb-8">
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)" }}
-        >
-          🛡️
-        </div>
+      <Link href="/" className="flex items-center gap-3 px-2 mb-10">
+        <Shield className="w-8 h-8 text-white" />
         <div>
-          <div className="font-bold text-sm leading-tight" style={{ color: "var(--clr-text-primary)" }}>SecureNet</div>
-          <div className="text-xs" style={{ color: "var(--clr-text-muted)" }}>NP-SERP</div>
+          <div className="font-heading font-black text-lg uppercase tracking-wider text-white leading-none">SecureNet</div>
+          <div className="text-[9px] font-heading font-bold text-muted uppercase tracking-widest mt-1">NP-SERP</div>
         </div>
       </Link>
 
       {/* Role badge */}
-      <div
-        className="flex items-center gap-2 px-3 py-2.5 rounded-lg mb-6"
-        style={{ background: `${meta.color}15`, border: `1px solid ${meta.color}25` }}
-      >
-        <span>{meta.icon}</span>
+      <div className={`flex items-center gap-3 px-3 py-3 rounded border ${meta.bgClass} mb-8`}>
+        <div className={meta.textClass}>{meta.icon}</div>
         <div>
-          <div className="text-xs font-bold" style={{ color: meta.color }}>{meta.label} Portal</div>
-          <div className="text-xs truncate max-w-[140px]" style={{ color: "var(--clr-text-muted)" }}>
-            {user?.firstName} {user?.lastName}
+          <div className={`text-[10px] font-heading font-bold uppercase tracking-wider ${meta.textClass}`}>{meta.label} Portal</div>
+          <div className="text-xs text-muted truncate max-w-[140px] mt-0.5 min-h-[16px]">
+            {mounted && user ? `${user.firstName} ${user.lastName}` : " "}
           </div>
         </div>
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 flex flex-col gap-1">
+      <nav className="flex-1 flex flex-col gap-2">
         {nav.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -110,32 +110,22 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={`sidebar-link ${isActive ? "active" : ""}`}
-              style={isActive ? { background: "rgba(45,140,240,0.12)", color: "#60a5fa" } : {}}
             >
-              <span className="text-base">{item.icon}</span>
-              <span>{item.label}</span>
-              {isActive && (
-                <div
-                  className="ml-auto w-1.5 h-1.5 rounded-full"
-                  style={{ background: "#60a5fa" }}
-                />
-              )}
+              <div className="opacity-70">{item.icon}</div>
+              <span className="font-heading font-bold text-xs tracking-wider uppercase">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="pt-4 border-t" style={{ borderColor: "var(--clr-border)" }}>
+      <div className="pt-6 mt-6 border-t border-surface-border">
         <button
           onClick={handleLogout}
-          className="sidebar-link w-full"
-          style={{ color: "#ef4444" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239,68,68,0.1)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          className="flex items-center gap-3 px-4 py-3 rounded w-full text-danger hover:bg-danger/10 transition-colors"
         >
-          <span>🚪</span>
-          <span>Sign Out</span>
+          <LogOut className="w-5 h-5 opacity-70" />
+          <span className="font-heading font-bold text-xs tracking-wider uppercase">Sign Out</span>
         </button>
       </div>
     </aside>
