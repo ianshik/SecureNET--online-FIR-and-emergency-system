@@ -83,7 +83,10 @@ export default function OfficerDashboard() {
       setIncomingAlert(null);
       await fetchDispatches();
       if (status === "EN_ROUTE") router.push("/officer/map");
-    } catch { }
+    } catch (err: any) { 
+      console.error(err);
+      alert(`Failed to update status: ${err.message || 'Unknown error'}`);
+    }
     finally { setUpdating(null); }
   }, [router]);
 

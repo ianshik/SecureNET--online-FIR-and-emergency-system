@@ -21,11 +21,39 @@ export default function LiveMap({
 }: LiveMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  
   const citizenMarkerRef = useRef<any>(null);
   const responderMarkerRef = useRef<any>(null);
+  const routePolylineRef = useRef<any>(null);
   
   const { socket, isConnected } = useSocketStore();
+
+  const fetchAndDrawRoute = async (L: any, map: any, start: [number, number], end: [number, number]) => {
+    try {
+      // OSRM expects coordinates in lng,lat format
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${start[0]},${start[1]};${end[0]},${end[1]}?overview=full&geometries=geojson`);
+      const data = await res.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        const coordinates = data.routes[0].geometry.coordinates;
+        // Convert GeoJSON [lng, lat] to Leaflet [lat, lng]
+        const latLngs = coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+        
+        if (routePolylineRef.current) {
+          routePolylineRef.current.setLatLngs(latLngs);
+        } else {
+          routePolylineRef.current = L.polyline(latLngs, {
+            color: '#3b82f6', // blue
+            weight: 5,
+            opacity: 0.7,
+            dashArray: '10, 10',
+            lineJoin: 'round'
+          }).addTo(map);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch route", err);
+    }
+  };
 
   // 1. Setup Map on mount
   useEffect(() => {
@@ -63,13 +91,14 @@ export default function LiveMap({
         iconAnchor: [12, 12],
       });
 
-      // Add initial markers if they exist
-      const initialCitizenLoc = citizenLocation || (role === "CITIZEN" ? initialLocation : undefined);
+      // The incident location is always initialLocation (unless citizenLocation overrides it)
+      const initialCitizenLoc = citizenLocation || initialLocation;
       if (initialCitizenLoc) {
         citizenMarkerRef.current = L.marker([initialCitizenLoc[1], initialCitizenLoc[0]], { icon: citizenIcon }).addTo(map);
       }
 
-      const initialResponderLoc = responderLocation || (role === "OFFICER" ? initialLocation : undefined);
+      // We only plot the officer if we actually have their location, otherwise we wait for GPS
+      const initialResponderLoc = responderLocation;
       if (initialResponderLoc) {
         responderMarkerRef.current = L.marker([initialResponderLoc[1], initialResponderLoc[0]], { icon: responderIcon }).addTo(map);
       }
@@ -110,6 +139,16 @@ export default function LiveMap({
           citizenMarkerRef.current.setLatLng(newLatLng);
         }
       }
+      
+      // If we are watching the officer move, draw the route
+      if (role === "CITIZEN" && data.role === "OFFICER") {
+        import("leaflet").then((L) => {
+           if (mapInstanceRef.current) {
+             // Route from Officer to Incident
+             fetchAndDrawRoute(L, mapInstanceRef.current, data.coordinates, initialLocation);
+           }
+        });
+      }
     });
 
     return () => {
@@ -130,10 +169,32 @@ export default function LiveMap({
           const newLatLng: [number, number] = [coords[1], coords[0]];
           
           // Update our own marker visually
-          if (role === "CITIZEN" && citizenMarkerRef.current) {
-             citizenMarkerRef.current.setLatLng(newLatLng);
-          } else if (role === "OFFICER" && responderMarkerRef.current) {
-             responderMarkerRef.current.setLatLng(newLatLng);
+          if (role === "CITIZEN") {
+             if (citizenMarkerRef.current) {
+                citizenMarkerRef.current.setLatLng(newLatLng);
+             }
+          } else if (role === "OFFICER") {
+             if (!responderMarkerRef.current) {
+                import("leaflet").then((L) => {
+                  const responderIcon = L.divIcon({
+                    className: "custom-leaflet-icon",
+                    html: `<div class="w-6 h-6 bg-emerald-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(16,185,129,0.8)] flex items-center justify-center"><span class="text-[12px]">🚓</span></div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12],
+                  });
+                  responderMarkerRef.current = L.marker([newLatLng[0], newLatLng[1]], { icon: responderIcon }).addTo(mapInstanceRef.current);
+                });
+             } else {
+                responderMarkerRef.current.setLatLng(newLatLng);
+             }
+             
+             // Draw route from Officer to Incident
+             import("leaflet").then((L) => {
+               if (mapInstanceRef.current) {
+                 // Incident is always at initialLocation
+                 fetchAndDrawRoute(L, mapInstanceRef.current, coords, initialLocation);
+               }
+             });
           }
         },
         (err) => console.error("GPS Error:", err),

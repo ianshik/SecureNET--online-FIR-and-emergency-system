@@ -80,7 +80,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    window.location.href = "/";
   };
 
   return (

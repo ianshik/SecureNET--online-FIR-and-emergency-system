@@ -4,17 +4,15 @@ import "leaflet/dist/leaflet.css";
 
 interface Incident {
   _id: string;
-  severity: string;
   status: string;
   servicesRequired: string[];
   location: { coordinates: [number, number] };
 }
 
-const SEV_COLOR: Record<string, string> = {
-  LOW: "#10b981",
-  MEDIUM: "#f59e0b",
-  HIGH: "#ef4444",
-  CRITICAL: "#dc2626",
+const SERVICE_COLOR: Record<string, string> = {
+  POLICE: "#3b82f6", // Blue
+  FIRE: "#ef4444",   // Red
+  AMBULANCE: "#10b981", // Green
 };
 
 export default function ControlRoomMap({ incidents }: { incidents: Incident[] }) {
@@ -82,14 +80,14 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
     currentIncidents.forEach((inc) => {
       if (!markersRef.current[inc._id]) {
         // Create new marker
-        const color = SEV_COLOR[inc.severity] || "#f59e0b";
-        const isPulse = inc.severity === "CRITICAL";
+        // Primary service for marker color
+        const primaryService = inc.servicesRequired && inc.servicesRequired.length > 0 ? inc.servicesRequired[0] : "POLICE";
+        const markerColor = SERVICE_COLOR[primaryService] || "#f59e0b";
 
         const icon = L.divIcon({
           className: "custom-leaflet-icon",
           html: `
-            <div class="relative w-3 h-3 rounded-sm flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.5)]" style="background: ${color}; border: 1px solid white; transform: rotate(45deg);">
-              ${isPulse ? `<div class="absolute inset-0 rounded-sm animate-ping opacity-75" style="background: ${color};"></div>` : ''}
+            <div class="relative w-3 h-3 rounded-sm flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.5)]" style="background: ${markerColor}; border: 1px solid white; transform: rotate(45deg);">
             </div>
           `,
           iconSize: [12, 12],
@@ -102,8 +100,8 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
           .bindPopup(`
             <div class="custom-popup font-sans">
               <div class="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
-                <span class="text-[9px] font-bold font-heading uppercase tracking-widest px-1.5 py-0.5 rounded" style="background: ${color}20; color: ${color}; border: 1px solid ${color}30">
-                  ${inc.severity}
+                <span class="text-[9px] font-bold font-heading uppercase tracking-widest px-1.5 py-0.5 rounded" style="background: ${markerColor}20; color: ${markerColor}; border: 1px solid ${markerColor}30">
+                  ${primaryService}
                 </span>
                 <span class="text-[10px] text-gray-500 font-mono tracking-wider">#${inc._id.slice(-6)}</span>
               </div>
@@ -121,8 +119,28 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
   };
 
   return (
-    <div className="w-full h-full relative z-0 mix-blend-screen">
-      <div ref={mapContainerRef} style={{ height: "100%", width: "100%", background: "#000000" }} />
+    <div className="w-full h-full relative z-0">
+      {/* Legend Overlay */}
+      <div className="absolute top-4 right-4 z-[1000] bg-black/80 backdrop-blur border border-surface-border rounded p-3 flex flex-col gap-2.5 shadow-xl pointer-events-none">
+        <h3 className="text-[10px] font-heading font-black uppercase tracking-widest text-muted mb-0.5">LEGEND</h3>
+        
+        <div className="flex items-center gap-3">
+          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: SERVICE_COLOR.POLICE, transform: 'rotate(45deg)', boxShadow: `0 0 10px ${SERVICE_COLOR.POLICE}80` }} />
+          <span className="text-[10px] font-mono uppercase tracking-widest text-slate-300">POLICE</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: SERVICE_COLOR.FIRE, transform: 'rotate(45deg)', boxShadow: `0 0 10px ${SERVICE_COLOR.FIRE}80` }} />
+          <span className="text-[10px] font-mono uppercase tracking-widest text-slate-300">FIRE</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: SERVICE_COLOR.AMBULANCE, transform: 'rotate(45deg)', boxShadow: `0 0 10px ${SERVICE_COLOR.AMBULANCE}80` }} />
+          <span className="text-[10px] font-mono uppercase tracking-widest text-slate-300">AMBULANCE</span>
+        </div>
+      </div>
+
+      <div ref={mapContainerRef} style={{ height: "100%", width: "100%", background: "#0a0a0a" }} />
 
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -147,7 +165,7 @@ export default function ControlRoomMap({ incidents }: { incidents: Incident[] })
         }
         /* Filter to make map tiles darker and more high-contrast */
         .leaflet-tile-pane {
-          filter: brightness(0.6) contrast(1.2) grayscale(0.2) invert(0);
+          filter: brightness(0.9) contrast(1.1) grayscale(0.5);
         }
       `}} />
     </div>

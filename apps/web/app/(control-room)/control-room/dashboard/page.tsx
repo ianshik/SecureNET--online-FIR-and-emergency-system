@@ -15,7 +15,6 @@ const ControlRoomMap = dynamic(
 
 interface Incident {
   _id: string;
-  severity: string;
   status: string;
   servicesRequired: string[];
   location: { coordinates: [number, number] };
@@ -87,11 +86,8 @@ export default function ControlRoomDashboard() {
     }
   };
 
-  const filtered = filter === "ALL"
-    ? incidents
-    : incidents.filter((i) => i.severity === filter);
+  const filtered = incidents;
 
-  const criticalCount = incidents.filter(i => i.severity === "CRITICAL").length;
   const activeCount = incidents.filter(i => i.status !== "RESOLVED").length;
 
   return (
@@ -124,8 +120,7 @@ export default function ControlRoomDashboard() {
             </div>
           </div>
           {[
-            { label: "Active", value: activeCount, class: "text-danger" },
-            { label: "Critical", value: criticalCount, class: "text-danger font-black" },
+            { label: "Active", value: activeCount, class: "text-danger font-black" },
             { label: "Total", value: incidents.length, class: "text-primary" },
           ].map((k) => (
             <div key={k.label} className="flex items-center gap-2">
@@ -144,21 +139,9 @@ export default function ControlRoomDashboard() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left — Incident Feed */}
         <div className="w-[400px] flex flex-col flex-shrink-0 border-r border-surface-border bg-surface/40 backdrop-blur-sm">
-          {/* Filter tabs */}
-          <div className="flex gap-1 p-4 border-b border-surface-border">
-            {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`flex-1 py-2 rounded text-[10px] font-heading font-bold uppercase tracking-widest transition-all ${
-                  filter === f 
-                    ? f === "CRITICAL" ? "bg-danger text-white shadow-[0_0_15px_rgba(220,38,38,0.4)]" : "bg-accent text-black"
-                    : "text-muted hover:bg-surface-hover border border-surface-border"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          {/* Header */}
+          <div className="p-4 border-b border-surface-border flex items-center justify-between">
+            <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">Incident Feed</span>
           </div>
 
           {/* Incident Cards */}
@@ -175,7 +158,6 @@ export default function ControlRoomDashboard() {
             ) : (
               filtered.map((incident) => {
                 const isSelected = selected?._id === incident._id;
-                const isCritical = incident.severity === "CRITICAL";
                 
                 return (
                   <div
@@ -183,15 +165,14 @@ export default function ControlRoomDashboard() {
                     onClick={() => setSelected(incident)}
                     className={`rounded p-4 cursor-pointer transition-all border ${
                       isSelected 
-                        ? isCritical ? "bg-danger/20 border-danger shadow-[0_0_20px_rgba(220,38,38,0.2)]" : "bg-accent/10 border-accent shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+                        ? "bg-accent/10 border-accent shadow-[0_0_20px_rgba(245,158,11,0.1)]"
                         : "bg-surface border-surface-border hover:border-accent/50"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-3">
-                      <Badge variant={incident.severity.toLowerCase() as any}>
-                        {isCritical && <ShieldAlert className="w-3 h-3 mr-1" />}
-                        {incident.severity}
-                      </Badge>
+                      <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
+                        ID: #{incident._id.slice(-6)}
+                      </span>
                       <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
                         {new Date(incident.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
@@ -232,9 +213,6 @@ export default function ControlRoomDashboard() {
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <Badge variant={selected.severity.toLowerCase() as any}>
-                        {selected.severity}
-                      </Badge>
                       <span className="text-xs font-mono text-muted">ID: {selected._id}</span>
                     </div>
                     <p className="font-heading font-black text-2xl uppercase tracking-wide text-white">
