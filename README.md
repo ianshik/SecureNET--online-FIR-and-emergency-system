@@ -59,6 +59,11 @@ The platform features four distinct, heavily secured interfaces, all utilizing a
 
 SecureNET is built using a **Monorepo architecture** to share TypeScript interfaces and Zod validation schemas across the stack.
 
+### 📐 System Design & Architecture Diagram
+We have a dedicated, detailed document breaking down the entire architecture and the real-time event-driven flow of the platform.
+
+**[👉 View the full System Design Documentation here](./System_Design.md)**
+
 ### Frontend (`apps/web`)
 - **Framework**: Next.js 15 (App Router)
 - **Styling**: Tailwind CSS (Custom thematic tokens, Glassmorphism, Micro-animations)
