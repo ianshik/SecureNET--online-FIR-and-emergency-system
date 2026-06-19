@@ -108,6 +108,58 @@ API2 -. Live Update .-> Socket
 
 Socket -. Notification .-> Citizen
 ```
+SOS REAL TIME FLOW
+```mermaid
+sequenceDiagram
+
+    participant Citizen
+    participant API
+    participant Socket
+    participant ControlRoom
+    participant Officer
+
+    Citizen->>API: Trigger SOS
+
+    API->>Socket: Broadcast Alert
+
+    Socket->>ControlRoom: Emergency Notification
+
+    ControlRoom->>Officer: Assign Incident
+
+    Officer->>API: Update Status
+
+    API->>Socket: Broadcast Status Update
+
+    Socket->>Citizen: Live Tracking Update
+```
+
+DEPLOYEMENT ARCHITECTURE
+
+```mermaid
+graph TD
+
+    User[Users]
+
+    Nginx[Nginx Load Balancer]
+
+    API1[Express Server 1]
+    API2[Express Server 2]
+
+    Redis[(Redis)]
+
+    Mongo[(MongoDB Atlas)]
+
+    User --> Nginx
+
+    Nginx --> API1
+    Nginx --> API2
+
+    API1 --> Redis
+    API2 --> Redis
+
+    API1 --> Mongo
+    API2 --> Mongo
+```
 
 ## Component Breakdown
 
