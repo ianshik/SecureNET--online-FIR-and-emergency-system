@@ -2,7 +2,7 @@
 
 This is the exhaustive, granular, step-by-step master roadmap for building the **SecureNET National Public Safety & Emergency Response Platform** completely from scratch. 
 
-This guide simulates the exact thought process, folder creation, and code execution required to build a highly complex, real-time, AI-integrated Monorepo web application without relying on AI code generation.
+This guide simulates the exact thought process, folder creation, and code execution required to build a highly complex, real-time, AI-integrated Monorepo web application without relying on AI code generation. It directly reflects the actual feature-driven architecture used in the codebase.
 
 ---
 
@@ -127,7 +127,7 @@ We name it `api` in its `package.json` and add our shared package as a dependenc
   "name": "api",
   "version": "1.0.0",
   "scripts": {
-    "dev": "ts-node-dev src/server.ts"
+    "dev": "ts-node-dev src/index.ts"
   },
   "dependencies": {
     "@securenet/shared": "*",
@@ -146,13 +146,14 @@ We name it `api` in its `package.json` and add our shared package as a dependenc
 }
 ```
 
-## 3.2 The Backend Directory Structure
-We must organize the backend cleanly. We create the following folders inside `apps/api/src`:
+## 3.2 The Backend Directory Structure (Feature-Based)
+Instead of throwing all logic into global `controllers/` and `routes/` folders, SecureNET uses a cleaner **Feature-Based (Domain-Driven) Architecture**. We create the following folders inside `apps/api/src`:
 ```bash
 mkdir src
 cd src
-mkdir config controllers models routes services socket middlewares
+mkdir config features models middleware scripts sockets utils
 ```
+Inside `features`, we will have domains like `sos`, `fir`, `users`, `auth`, `dispatch`, `ai` etc.
 
 ## 3.3 Database Connection (`config/db.ts`)
 We create `apps/api/src/config/db.ts` to handle Mongoose.
@@ -173,8 +174,8 @@ export const connectDB = async () => {
 };
 ```
 
-## 3.4 The Base Server (`server.ts`)
-We create `apps/api/src/server.ts`. This is iterative. For now, it's just basic Express.
+## 3.4 The Base Server (`index.ts`)
+We create `apps/api/src/index.ts`. This is iterative. For now, it's just basic Express.
 
 ```typescript
 import express from 'express';
@@ -208,9 +209,8 @@ We create the database schema. Notice the `2dsphere` index—this is critical fo
 import mongoose from 'mongoose';
 
 const incidentSchema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String, required: true },
-    type: { type: String, enum: ['POLICE', 'FIRE', 'MEDICAL', 'GENERAL_SOS'], required: true },
+    citizenId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    servicesRequired: [{ type: String }],
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
         coordinates: { 
@@ -218,8 +218,7 @@ const incidentSchema = new mongoose.Schema({
             required: true 
         }
     },
-    status: { type: String, default: 'PENDING' },
-    assignedOfficer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    status: { type: String, default: 'SOS_SENT' },
 }, { timestamps: true });
 
 // CRITICAL: Geospatial index for distance calculations
@@ -251,84 +250,75 @@ export const User = mongoose.model('User', userSchema);
 
 ---
 
-# Part 5: The API Routes & Controllers
+# Part 5: The Feature-Based API Layer
 
-We need HTTP endpoints so the frontend can create and read incidents.
+Because we are using a Feature architecture, logic is split by domain. Creating an emergency incident happens in the `sos` feature, while fetching incidents for the map happens in the `dispatch` feature.
 
-## 5.1 The Controller (`controllers/incidentController.ts`)
-Controllers hold the business logic.
+## 5.1 The SOS Controller (`features/sos/sos.controller.ts`)
 
 ```typescript
 import { Request, Response } from 'express';
-import { Incident } from '../models/Incident';
-import { IncidentSchema } from '@securenet/shared'; // Importing from our Monorepo package!
+import { Incident, IncidentSeverity, IncidentStatus } from '../../models/Incident';
+import { z } from 'zod';
 
-export const createIncident = async (req: Request, res: Response) => {
-    try {
-        // Validate incoming data using Shared Zod Schema
-        const validatedData = IncidentSchema.parse(req.body);
-        
-        // Transform standard lat/lng into GeoJSON format for MongoDB
-        const newIncident = await Incident.create({
-            title: validatedData.title,
-            description: validatedData.description,
-            type: validatedData.type,
-            location: {
-                type: 'Point',
-                coordinates: [validatedData.location.longitude, validatedData.location.latitude]
-            }
-        });
-
-        res.status(201).json(newIncident);
-    } catch (error) {
-        res.status(400).json({ error: "Validation or Server Error" });
-    }
-};
-
-export const getNearestIncidents = async (req: Request, res: Response) => {
-    const { lng, lat, maxDistance = 5000 } = req.query; // maxDistance in meters
-    
-    const incidents = await Incident.find({
-        location: {
-            $near: {
-                $geometry: { type: "Point", coordinates: [Number(lng), Number(lat)] },
-                $maxDistance: Number(maxDistance)
-            }
-        }
+export const triggerSOS = async (req: AuthRequest, res: Response) => {
+    // Validate data using Zod
+    // Create the initial Incident in the DB
+    const incident = await Incident.create({
+      citizenId: req.user!.id,
+      location: { type: 'Point', coordinates: [lng, lat] },
+      servicesRequired: ['POLICE'],
+      severity: IncidentSeverity.CRITICAL,
+      status: IncidentStatus.SOS_SENT,
     });
+
+    // ... run dispatching logic for nearest officers and emit via WebSockets ...
+    res.status(201).json({ data: incident });
+};
+```
+
+## 5.2 The SOS Router (`features/sos/sos.routes.ts`)
+
+```typescript
+import express from 'express';
+import { triggerSOS } from './sos.controller';
+
+const router = express.Router();
+router.post('/', triggerSOS);
+
+export default router;
+```
+
+## 5.3 The Dispatch Controller (`features/dispatch/dispatch.controller.ts`)
+
+To populate the map, the control room hits this dispatch endpoint to read the created Incidents.
+
+```typescript
+import { Request, Response } from 'express';
+import { Incident, IncidentStatus } from '../../models/Incident';
+
+export const getAllActiveIncidents = async (req: AuthRequest, res: Response) => {
+    const incidents = await Incident.find({ status: { $ne: IncidentStatus.RESOLVED } })
+        .populate('citizenId')
+        .populate('dispatchedUnits');
     
     res.json(incidents);
 };
 ```
-
-## 5.2 The Router (`routes/incidentRoutes.ts`)
-We map URLs to the controller functions.
-
-```typescript
-import express from 'express';
-import { createIncident, getNearestIncidents } from '../controllers/incidentController';
-
-const router = express.Router();
-
-router.post('/', createIncident);
-router.get('/nearest', getNearestIncidents);
-
-export default router;
-```
-*We then return to `server.ts` and add `app.use('/api/incidents', incidentRoutes);`*
+*We then return to `index.ts` and add `app.use('/api/sos', sosRoutes);` and `app.use('/api/dispatch', dispatchRoutes);`*
 
 ---
 
 # Part 6: Iteration 1 - Injecting WebSockets (Socket.io)
 
-An emergency system must be real-time. We have to refactor `server.ts` to attach Socket.io.
+An emergency system must be real-time. We have to refactor `index.ts` to attach Socket.io.
 
-## 6.1 Refactoring `server.ts`
+## 6.1 Refactoring `index.ts`
 ```diff
   import express from 'express';
   import cors from 'cors';
 + import http from 'http';
-+ import { initSocket } from './socket/io';
++ import { initSocket } from './sockets/socket';
   import { connectDB } from './config/db';
 
   connectDB();
@@ -344,7 +334,7 @@ An emergency system must be real-time. We have to refactor `server.ts` to attach
 + server.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 ```
 
-## 6.2 Socket Implementation (`socket/io.ts`)
+## 6.2 Socket Implementation (`sockets/socket.ts`)
 We create rooms. Control Room staff join the `control-room` room. Officers join their own specific room.
 
 ```typescript
@@ -380,23 +370,20 @@ export const getIO = () => {
 ```
 
 ## 6.3 Connecting HTTP to WebSockets
-We must return to `controllers/incidentController.ts`. When a citizen makes a POST request to create an incident, we want to instantly alert the control room.
+We must return to `features/sos/sos.controller.ts`. When `triggerSOS` fires, we instantly alert the control room.
 
 ```diff
-+ import { getIO } from '../socket/io';
++ import { getIO } from '../../sockets/socket';
 
-  export const createIncident = async (req: Request, res: Response) => {
-      try {
-          const validatedData = IncidentSchema.parse(req.body);
-          const newIncident = await Incident.create({...});
+  export const triggerSOS = async (req: AuthRequest, res: Response) => {
+      // ... create Incident ...
           
 +         // REAL-TIME BROADCAST
 +         // The moment the DB saves, we push an event to the control room
 +         const io = getIO();
-+         io.to('control-room').emit('NEW_EMERGENCY', newIncident);
++         io.to('role:CONTROL_ROOM').emit('sos:new', incident);
 
-          res.status(201).json(newIncident);
-      } catch (error) { ... }
+          res.status(201).json(incident);
   };
 ```
 
@@ -430,6 +417,8 @@ import type { Config } from 'tailwindcss'
 const config: Config = {
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
@@ -449,7 +438,7 @@ const config: Config = {
 export default config
 ```
 
-In `src/app/globals.css`, we set the dark background:
+In `apps/web/app/globals.css`, we set the dark background:
 ```css
 @tailwind base;
 @tailwind components;
@@ -466,32 +455,11 @@ body {
 }
 ```
 
-## 7.3 Global State Management (Zustand)
-We need to track the user's location continuously.
-```bash
-npm install zustand
-```
-
-Create `src/store/useAppStore.ts`:
-```typescript
-import { create } from 'zustand';
-
-interface AppState {
-    userLocation: { lat: number; lng: number } | null;
-    setUserLocation: (lat: number, lng: number) => void;
-}
-
-export const useAppStore = create<AppState>((set) => ({
-    userLocation: null,
-    setUserLocation: (lat, lng) => set({ userLocation: { lat, lng } }),
-}));
-```
-
 ---
 
 # Part 8: The GIS & Map Layer (Leaflet & OSRM)
 
-This is the hardest frontend feature: drawing maps and calculating routes.
+This is the hardest frontend feature: drawing maps and calculating routes. The map components reside in `apps/web/components/maps`.
 
 ## 8.1 Map Dependencies
 ```bash
@@ -507,7 +475,7 @@ We must add Leaflet CSS to `globals.css`:
 ## 8.2 Building the `LiveMap.tsx` Component
 Because Leaflet uses the `window` object, it crashes Next.js Server-Side Rendering (SSR). We must create the component, and then import it dynamically.
 
-Create `src/components/LiveMap.tsx`:
+Create `apps/web/components/maps/LiveMap.tsx`:
 ```tsx
 'use client';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
@@ -570,8 +538,10 @@ export default function LiveMap({ center, incidents, officerLocation }: LiveMapP
 }
 ```
 
+*Note: The platform also utilizes `ControlRoomMap.tsx` and `HeatMap.tsx` within the same folder.*
+
 ## 8.3 Using the Map dynamically
-In `src/app/(control-room)/page.tsx`, we must import the map without SSR:
+In `apps/web/app/(control-room)/page.tsx`, we must import the map without SSR:
 
 ```tsx
 'use client';
@@ -580,7 +550,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 // DYNAMIC IMPORT: Disable Server Side Rendering for Leaflet
-const LiveMap = dynamic(() => import('../../components/LiveMap'), { ssr: false });
+const LiveMap = dynamic(() => import('../../components/maps/LiveMap'), { ssr: false });
 
 export default function ControlRoom() {
     const [incidents, setIncidents] = useState([]);
@@ -591,7 +561,7 @@ export default function ControlRoom() {
         
         socket.emit('JOIN_ROOM', 'control-room');
 
-        socket.on('NEW_EMERGENCY', (incident) => {
+        socket.on('sos:new', (incident) => {
             // Reformat DB location object to Leaflet format
             const mapPin = {
                 id: incident._id,
@@ -621,82 +591,81 @@ export default function ControlRoom() {
 
 We don't want officers typing complex legal documents on their phones. We use Gemini to format rough notes.
 
-## 9.1 Backend AI Service
+## 9.1 Backend AI Controller
 Back in `apps/api`:
 ```bash
 npm install @google/generative-ai
 ```
 
-Create `apps/api/src/services/aiService.ts`:
+Create `apps/api/src/features/ai/ai.controller.ts`:
 ```typescript
+import { Request, Response } from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
-export const draftFIR = async (rawStatement: string) => {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-    
-    const prompt = `
-    You are a professional legal assistant for the Police Department.
-    Convert the following rough statement from a citizen into a formal First Information Report (FIR).
-    You must extract and clearly label:
-    1. The Accused (if known)
-    2. The Victims/Witnesses
-    3. Suggested Indian Penal Code (IPC) Sections applicable.
-    
-    Format the output as a strict JSON object.
-    
-    Raw Statement: "${rawStatement}"
-    `;
-
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    
-    // We strip markdown backticks if Gemini returns them
-    const cleanJson = responseText.replace(/```json\n|\n```/g, '');
-    return JSON.parse(cleanJson);
-};
-```
-
-## 9.2 The AI Endpoint
-In `apps/api/src/controllers/firController.ts`:
-```typescript
-import { Request, Response } from 'express';
-import { draftFIR } from '../services/aiService';
-
 export const generateFIR = async (req: Request, res: Response) => {
     try {
-        const { statement } = req.body;
-        const draftedFIR = await draftFIR(statement);
-        res.json(draftedFIR);
+        const { rawStatement } = req.body;
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        
+        const prompt = `
+        You are a professional legal assistant for the Police Department.
+        Convert the following rough statement from a citizen into a formal First Information Report (FIR).
+        You must extract and clearly label:
+        1. The Accused (if known)
+        2. The Victims/Witnesses
+        3. Suggested Indian Penal Code (IPC) Sections applicable.
+        
+        Format the output as a strict JSON object.
+        
+        Raw Statement: "${rawStatement}"
+        `;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        
+        const cleanJson = responseText.replace(/```json\n|\n```/g, '');
+        res.json(JSON.parse(cleanJson));
     } catch (error) {
         res.status(500).json({ error: "AI Generation Failed" });
     }
 };
 ```
-*We add this to `routes/firRoutes.ts` and attach it to `server.ts`.*
+
+## 9.2 The AI Endpoint
+In `apps/api/src/features/ai/ai.routes.ts`:
+```typescript
+import express from 'express';
+import { generateFIR } from './ai.controller';
+
+const router = express.Router();
+router.post('/fir/draft', generateFIR);
+
+export default router;
+```
+*We attach this router to `index.ts`.*
 
 ---
 
 # Part 10: The Citizen "SOS" Interface
 
 We build the actual button the user presses.
-In `apps/web/src/app/(citizen)/page.tsx`:
+In `apps/web/app/(citizen)/page.tsx`:
 
 ```tsx
 'use client';
-import { useAppStore } from '../../store/useAppStore';
 import { useState, useEffect } from 'react';
 
 export default function CitizenPortal() {
-    const { userLocation, setUserLocation } = useAppStore();
+    const [userLocation, setUserLocation] = useState(null);
     const [loading, setLoading] = useState(false);
 
     // Get GPS on load
     useEffect(() => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition((position) => {
-                setUserLocation(position.coords.latitude, position.coords.longitude);
+                setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
             });
         }
     }, []);
@@ -705,18 +674,13 @@ export default function CitizenPortal() {
         if (!userLocation) return alert("Waiting for GPS...");
         setLoading(true);
         
-        // Send request to our Express Backend
-        await fetch('http://localhost:5000/api/incidents', {
+        // Send request to our Express Backend SOS controller
+        await fetch('http://localhost:5000/api/sos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                title: "EMERGENCY SOS",
-                description: "Immediate assistance required",
-                type: "GENERAL_SOS",
-                location: {
-                    longitude: userLocation.lng,
-                    latitude: userLocation.lat
-                }
+                servicesRequired: ['POLICE'],
+                coordinates: [userLocation.lng, userLocation.lat]
             })
         });
         
@@ -748,32 +712,40 @@ export default function CitizenPortal() {
 
 The app works, but it's completely unprotected. We must go back to the backend and add authentication.
 
-## 11.1 JWT Generation
+## 11.1 JWT Generation (Utils)
 ```bash
 npm install jsonwebtoken bcryptjs cookie-parser
 npm install -D @types/jsonwebtoken @types/bcryptjs @types/cookie-parser
 ```
 
-In `apps/api/src/controllers/authController.ts`, when a user logs in:
+In `apps/api/src/utils/jwt.ts`:
 ```typescript
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+
+export const generateToken = (userId: mongoose.Types.ObjectId, role: string) => {
+  return jwt.sign({ id: userId, role }, process.env.JWT_SECRET!, { expiresIn: '15m' });
+};
+
+export const verifyToken = (token: string): any => {
+  return jwt.verify(token, process.env.JWT_SECRET!);
+};
+```
+
+In `apps/api/src/features/auth/auth.controller.ts`, when a user logs in:
+```typescript
+import { generateToken } from '../../utils/jwt';
 
 export const login = async (req, res) => {
-    // ... verify password ...
-    
-    const token = jwt.sign(
-        { id: user._id, role: user.role }, 
-        process.env.JWT_SECRET, 
-        { expiresIn: '12h' }
-    );
+    // ... verify password against DB ...
+    const token = generateToken(user._id, user.role);
 
-    // CRITICAL: We don't send the token in JSON. We send it in an HttpOnly cookie!
-    // This prevents Cross-Site Scripting (XSS) attacks from stealing the token.
-    res.cookie('securenet_token', token, {
+    // Send the token securely via HttpOnly cookie
+    res.cookie('accessToken', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 12 * 60 * 60 * 1000 // 12 hours
+        maxAge: 15 * 60 * 1000 // 15 minutes
     });
 
     res.json({ message: "Logged in successfully" });
@@ -781,53 +753,48 @@ export const login = async (req, res) => {
 ```
 
 ## 11.2 Role-Based Access Control (RBAC) Middleware
-We create `apps/api/src/middlewares/authMiddleware.ts`. We place this file in front of protected routes.
+We create `apps/api/src/middleware/auth.ts`. We place this file in front of protected routes.
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { verifyToken } from '../utils/jwt';
 
-// Extend Express Request type to hold user data
 export interface AuthRequest extends Request {
     user?: any;
 }
 
-export const protect = (req: AuthRequest, res: Response, next: NextFunction) => {
-    const token = req.cookies.securenet_token;
-    
-    if (!token) return res.status(401).json({ error: "Not authorized" });
+export const authorize = (...roles: string[]) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+        try {
+            const token = req.cookies.accessToken;
+            if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
-        req.user = decoded; // Now req.user.role exists!
-        next();
-    } catch (error) {
-        res.status(401).json({ error: "Token failed" });
-    }
-};
+            const decoded = verifyToken(token);
+            if (roles.length && !roles.includes(decoded.role)) {
+                return res.status(403).json({ error: "Forbidden: Insufficient Permissions" });
+            }
 
-export const requireRole = (...roles: string[]) => {
-    return (req: AuthRequest, res: Response, next: NextFunction) => {
-        if (!req.user || !roles.includes(req.user.role)) {
-            return res.status(403).json({ error: "Forbidden: Insufficient Permissions" });
+            req.user = decoded; // Now req.user.role is available to controllers!
+            next();
+        } catch (error) {
+            res.status(401).json({ error: "Token failed" });
         }
-        next();
     };
 };
 ```
 
 ## 11.3 Applying Security
-Back in `apps/api/src/routes/firRoutes.ts`:
+Back in `apps/api/src/features/ai/ai.routes.ts`:
 ```diff
   import express from 'express';
-  import { generateFIR } from '../controllers/firController';
-+ import { protect, requireRole } from '../middlewares/authMiddleware';
+  import { generateFIR } from './ai.controller';
++ import { authorize } from '../../middleware/auth';
 
   const router = express.Router();
 
-- router.post('/draft', generateFIR);
+- router.post('/fir/draft', generateFIR);
 + // Only Officers can use the AI FIR Drafter!
-+ router.post('/draft', protect, requireRole('OFFICER', 'ADMIN'), generateFIR);
++ router.post('/fir/draft', authorize('OFFICER', 'ADMIN'), generateFIR);
 
   export default router;
 ```
@@ -843,7 +810,7 @@ To deploy this project:
 
 ### The Iterative Nature of Development
 As demonstrated in this 12-part master guide, building a complex application is never linear. 
-- You build the `server.ts` shell (Part 3).
+- You build the `index.ts` shell (Part 3).
 - You add DB Models (Part 4).
 - You return to the shell to add Sockets (Part 6).
 - You build the UI (Part 7, 8, 10).
