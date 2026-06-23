@@ -170,7 +170,7 @@ export default function CitizenDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { href: "/citizen/complaints/new", icon: <PenTool className="w-6 h-6"/>, label: "FILE REPORT", desc: "Initialize incident record" },
-          { href: "/citizen/fir",            icon: <FileSearch className="w-6 h-6"/>, label: "FIR ARCHIVE", desc: "Access official logs" },
+          { href: "/citizen/complaints",            icon: <FileSearch className="w-6 h-6"/>, label: "FIR ARCHIVE", desc: "Access official logs" },
           { href: "/citizen/track",          icon: <MapPin className="w-6 h-6"/>, label: "LIVE TRACKING", desc: "Monitor responder units" },
           { href: "/citizen/profile",        icon: <ShieldCheck className="w-6 h-6"/>, label: "SECURITY PROFILE", desc: "Identity & clearance" },
         ].map((l) => (
