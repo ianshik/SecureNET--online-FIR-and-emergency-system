@@ -12,10 +12,10 @@ export const getDashboardKPIs = async (req: AuthRequest, res: Response) => {
     const totalComplaints = await Complaint.countDocuments();
     const activeIncidents = await Incident.countDocuments({ status: { $ne: 'RESOLVED' } });
     const totalFIRs = await FIR.countDocuments();
-    
+
     // Mock Response Time
     const avgResponseTimeMin = 14.5;
-    
+
     // Resolution Rate Mock
     const resolvedComplaints = await Complaint.countDocuments({ status: 'RESOLVED' });
     const resolutionRate = totalComplaints > 0 ? (resolvedComplaints / totalComplaints) * 100 : 0;
@@ -58,7 +58,7 @@ export const getCrimeTrends = async (req: AuthRequest, res: Response) => {
 export const getOfficerPerformance = async (req: AuthRequest, res: Response) => {
   try {
     const officers = await Officer.find().select('firstName lastName badgeNumber status _id');
-    
+
     // Aggregate completed dispatches per officer
     const dispatchStats = await DispatchRequest.aggregate([
       { $match: { status: 'COMPLETED' } },
@@ -121,7 +121,7 @@ export const getTimeTrends = async (req: AuthRequest, res: Response) => {
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const trendMap = new Map<string, number>();
-    
+
     // Pre-fill the map with the last 7 days in order
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -149,7 +149,7 @@ export const getTimeTrends = async (req: AuthRequest, res: Response) => {
 export const getTopHeroes = async (req: Request, res: Response) => {
   try {
     const officers = await Officer.find().select('firstName lastName officerType _id');
-    
+
     // Aggregate completed dispatches per officer
     const dispatchStats = await DispatchRequest.aggregate([
       { $match: { status: 'COMPLETED' } },
@@ -174,9 +174,9 @@ export const getTopHeroes = async (req: Request, res: Response) => {
 
     officers.forEach(o => {
       if (!o.officerType) return;
-      
+
       const casesResolved = statsMap.get(o._id.toString()) || 0;
-      
+
       if (heroes[o.officerType] && casesResolved > heroes[o.officerType].casesResolved) {
         heroes[o.officerType] = {
           name: `${o.firstName} ${o.lastName}`,
@@ -199,3 +199,4 @@ export const getTopHeroes = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+// just fot the daily checkin
