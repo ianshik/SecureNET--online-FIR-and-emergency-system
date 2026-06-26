@@ -199,4 +199,3 @@ export const getTopHeroes = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-// just fot the daily checkin
